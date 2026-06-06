@@ -27,7 +27,7 @@ func NewDatabase() (*Database, error) {
 
 	database := &Database{
 		wal:  wal,
-		memt: NewMemtable(),
+		memt: NewMemtable(4000),
 	}
 
 	c := make(chan MetaRecord)
