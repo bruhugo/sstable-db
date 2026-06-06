@@ -1,0 +1,33 @@
+syntax = "proto3";
+package database;
+
+option go_package = "github.com/bruhugo/protobuf_sstable;pb";
+
+enum RecordType {
+    RECORD_TYPE_UNKOWN = 0;
+    RECORD_TYPE_WRITE = 1;
+    RECORD_TYPE_DELETE = 2;
+}
+
+message Record {
+    bytes key = 1;
+    bytes value = 2;
+    uint64 sequence_number = 3;
+    RecordType record_type = 4;
+}
+
+message WalRecord {
+    Record record = 1;
+    uint32 checksum = 2;
+}
+
+message SSTableRecord {
+    Record record = 1;
+    uint32 checksum = 2;
+}
+
+message ManifestContent {
+    uint64 last_sequence_number = 1;
+    repeated string files = 2;
+}
+
