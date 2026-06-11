@@ -72,8 +72,8 @@ func (RecordType) EnumDescriptor() ([]byte, []int) {
 
 type Record struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	Key            []byte                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Value          []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Key            string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value          string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	SequenceNumber uint64                 `protobuf:"varint,3,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
 	RecordType     RecordType             `protobuf:"varint,4,opt,name=record_type,json=recordType,proto3,enum=database.RecordType" json:"record_type,omitempty"`
 	unknownFields  protoimpl.UnknownFields
@@ -110,18 +110,18 @@ func (*Record) Descriptor() ([]byte, []int) {
 	return file_database_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *Record) GetKey() []byte {
+func (x *Record) GetKey() string {
 	if x != nil {
 		return x.Key
 	}
-	return nil
+	return ""
 }
 
-func (x *Record) GetValue() []byte {
+func (x *Record) GetValue() string {
 	if x != nil {
 		return x.Value
 	}
-	return nil
+	return ""
 }
 
 func (x *Record) GetSequenceNumber() uint64 {
@@ -190,6 +190,50 @@ func (x *WalRecord) GetChecksum() uint32 {
 	return 0
 }
 
+type SSTableKeyPair struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Keyoffset     map[string]uint64      `protobuf:"bytes,1,rep,name=keyoffset,proto3" json:"keyoffset,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SSTableKeyPair) Reset() {
+	*x = SSTableKeyPair{}
+	mi := &file_database_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SSTableKeyPair) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SSTableKeyPair) ProtoMessage() {}
+
+func (x *SSTableKeyPair) ProtoReflect() protoreflect.Message {
+	mi := &file_database_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SSTableKeyPair.ProtoReflect.Descriptor instead.
+func (*SSTableKeyPair) Descriptor() ([]byte, []int) {
+	return file_database_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SSTableKeyPair) GetKeyoffset() map[string]uint64 {
+	if x != nil {
+		return x.Keyoffset
+	}
+	return nil
+}
+
 type SSTableRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Record        *Record                `protobuf:"bytes,1,opt,name=record,proto3" json:"record,omitempty"`
@@ -200,7 +244,7 @@ type SSTableRecord struct {
 
 func (x *SSTableRecord) Reset() {
 	*x = SSTableRecord{}
-	mi := &file_database_proto_msgTypes[2]
+	mi := &file_database_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -212,7 +256,7 @@ func (x *SSTableRecord) String() string {
 func (*SSTableRecord) ProtoMessage() {}
 
 func (x *SSTableRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_database_proto_msgTypes[2]
+	mi := &file_database_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -225,7 +269,7 @@ func (x *SSTableRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SSTableRecord.ProtoReflect.Descriptor instead.
 func (*SSTableRecord) Descriptor() ([]byte, []int) {
-	return file_database_proto_rawDescGZIP(), []int{2}
+	return file_database_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SSTableRecord) GetRecord() *Record {
@@ -252,7 +296,7 @@ type ManifestContent struct {
 
 func (x *ManifestContent) Reset() {
 	*x = ManifestContent{}
-	mi := &file_database_proto_msgTypes[3]
+	mi := &file_database_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -264,7 +308,7 @@ func (x *ManifestContent) String() string {
 func (*ManifestContent) ProtoMessage() {}
 
 func (x *ManifestContent) ProtoReflect() protoreflect.Message {
-	mi := &file_database_proto_msgTypes[3]
+	mi := &file_database_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -277,7 +321,7 @@ func (x *ManifestContent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManifestContent.ProtoReflect.Descriptor instead.
 func (*ManifestContent) Descriptor() ([]byte, []int) {
-	return file_database_proto_rawDescGZIP(), []int{3}
+	return file_database_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ManifestContent) GetLastSequenceNumber() uint64 {
@@ -300,14 +344,19 @@ const file_database_proto_rawDesc = "" +
 	"\n" +
 	"\x0edatabase.proto\x12\bdatabase\"\x90\x01\n" +
 	"\x06Record\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\fR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value\x12'\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12'\n" +
 	"\x0fsequence_number\x18\x03 \x01(\x04R\x0esequenceNumber\x125\n" +
 	"\vrecord_type\x18\x04 \x01(\x0e2\x14.database.RecordTypeR\n" +
 	"recordType\"Q\n" +
 	"\tWalRecord\x12(\n" +
 	"\x06record\x18\x01 \x01(\v2\x10.database.RecordR\x06record\x12\x1a\n" +
-	"\bchecksum\x18\x02 \x01(\rR\bchecksum\"U\n" +
+	"\bchecksum\x18\x02 \x01(\rR\bchecksum\"\x95\x01\n" +
+	"\x0eSSTableKeyPair\x12E\n" +
+	"\tkeyoffset\x18\x01 \x03(\v2'.database.SSTableKeyPair.KeyoffsetEntryR\tkeyoffset\x1a<\n" +
+	"\x0eKeyoffsetEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"U\n" +
 	"\rSSTableRecord\x12(\n" +
 	"\x06record\x18\x01 \x01(\v2\x10.database.RecordR\x06record\x12\x1a\n" +
 	"\bchecksum\x18\x02 \x01(\rR\bchecksum\"Y\n" +
@@ -333,23 +382,26 @@ func file_database_proto_rawDescGZIP() []byte {
 }
 
 var file_database_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_database_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_database_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_database_proto_goTypes = []any{
 	(RecordType)(0),         // 0: database.RecordType
 	(*Record)(nil),          // 1: database.Record
 	(*WalRecord)(nil),       // 2: database.WalRecord
-	(*SSTableRecord)(nil),   // 3: database.SSTableRecord
-	(*ManifestContent)(nil), // 4: database.ManifestContent
+	(*SSTableKeyPair)(nil),  // 3: database.SSTableKeyPair
+	(*SSTableRecord)(nil),   // 4: database.SSTableRecord
+	(*ManifestContent)(nil), // 5: database.ManifestContent
+	nil,                     // 6: database.SSTableKeyPair.KeyoffsetEntry
 }
 var file_database_proto_depIdxs = []int32{
 	0, // 0: database.Record.record_type:type_name -> database.RecordType
 	1, // 1: database.WalRecord.record:type_name -> database.Record
-	1, // 2: database.SSTableRecord.record:type_name -> database.Record
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	6, // 2: database.SSTableKeyPair.keyoffset:type_name -> database.SSTableKeyPair.KeyoffsetEntry
+	1, // 3: database.SSTableRecord.record:type_name -> database.Record
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_database_proto_init() }
@@ -363,7 +415,7 @@ func file_database_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_database_proto_rawDesc), len(file_database_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -10,8 +10,8 @@ enum RecordType {
 }
 
 message Record {
-    bytes key = 1;
-    bytes value = 2;
+    string key = 1;
+    string value = 2;
     uint64 sequence_number = 3;
     RecordType record_type = 4;
 }
@@ -19,6 +19,10 @@ message Record {
 message WalRecord {
     Record record = 1;
     uint32 checksum = 2;
+}
+
+message SSTableKeyPair {
+    map<string, uint64> keyoffset = 1;
 }
 
 message SSTableRecord {

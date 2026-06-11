@@ -34,11 +34,19 @@ func NewWAL(filename string) (*WAL, error) {
 	return wal, nil
 }
 
-func (w *WAL) close() {
+func (w *WAL) Close() {
 	w.file.Close()
 }
 
-func (w *WAL) append(record *pb.Record) error {
+func (w *WAL) Clear() error {
+	err := w.file.Truncate(0)
+	if err != nil {
+		return fmt.Errorf("error truncating wal file: %w", err)
+	}
+	return nil
+}
+
+func (w *WAL) Append(record *pb.Record) error {
 	crc := computeChecksum(record)
 	walRecord := pb.WalRecord{
 		Record:   record,
