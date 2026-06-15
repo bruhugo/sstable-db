@@ -1,7 +1,9 @@
-.PHONY: proto vet build
+TARGET = main
 
-build: vet
-	go build .
+.PHONY: proto vet lint build
+
+build: vet test
+	go build -o ${TARGET} x.
 
 proto:
 	protoc \
@@ -11,3 +13,12 @@ proto:
 		proto/*.proto
 vet:
 	go vet ./...
+
+test:
+	go test ./...
+
+test-cover:
+	go test -v -cover -coverprofile=c.out ./...
+
+test-cover-html:
+	go tool cover -html=c.out ./...

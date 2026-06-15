@@ -2,7 +2,6 @@ package protobuf_sstable
 
 import (
 	"bufio"
-	"bytes"
 	"container/heap"
 	"encoding/binary"
 	"fmt"
@@ -32,8 +31,12 @@ func (it *SSTableIterator) Next() bool {
 	}
 
 	b := make([]byte, size)
+	if _, err := it.file.Read(b); err != nil {
+		// TODO: maybe handle the error here
+		return false
+	}
 
-	var record *pb.SSTableRecord
+	record := &pb.SSTableRecord{}
 	err = proto.Unmarshal(b, record)
 	if err != nil {
 		return false
@@ -87,32 +90,25 @@ func newSSTable(file *os.File) *SSTable {
 	}
 }
 
-// TODO: implement manifest
-type Manifest struct {
-	manifest pb.ManifestContent
-	filepath string
-	file     *os.File
-	mu       sync.Mutex
-}
-
 type SSTables struct {
 	tables         []*SSTable
 	mu             sync.RWMutex
-	manifest       Manifest
 	dir            string
 	sequenceNumber uint64
 }
 
-func (sst *SSTables) CreateSSTable(mrs []MetaRecord) error {
-	// we lock here to conquer the sstable sequence number
-	// once we have it, we can unlock and write to the
-	// file
+func NewSSTables(dir string) *SSTables {
+	return &SSTables{
+		dir: dir,
+	}
+}
 
+func (sst *SSTables) CreateSSTable(mrs []MetaRecord) error {
 	sst.mu.Lock()
-	filename := createSSTableName(sst.sequenceNumber)
+	filename := sst.createSSTableName(sst.sequenceNumber)
+	sst.sequenceNumber++
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		// TODO: handle it gracefully
 		panic(err.Error())
 	}
 
@@ -127,63 +123,36 @@ func (sst *SSTables) CreateSSTable(mrs []MetaRecord) error {
 	buffer := bufio.NewWriter(file)
 	var offset uint64 = 0
 	for _, mr := range mrs {
-		data, err := serializeMetarecord(mr)
+		w, err := serializeSSTableRecord(mr, buffer)
 		if err != nil {
-			// TODO: handle error
-			panic(err.Error())
+			return err
 		}
-		buffer.Write(data)
-		offset += uint64(len(data) + 8)
 		ko.Keyoffset[mr.record.Key] = offset
+		offset += uint64(w)
 	}
 
-	kod, err := proto.Marshal(&ko)
-	if err != nil {
-		// TODO: handle
-		panic(err)
+	if _, err := serializeKeyoffset(&ko, buffer); err != nil {
+		return err
 	}
 
-	buffer.Write(kod)
-	buffer.Write(binary.LittleEndian.AppendUint64(nil, uint64(len(kod))))
+	buffer.Flush()
 
 	t.valid = true
 
 	return nil
 }
 
-func serializeMetarecord(record MetaRecord) ([]byte, error) {
-	buffer := bytes.NewBuffer(make([]byte, 0))
-
-	sstrecord := &pb.SSTableRecord{
-		Record:   record.record,
-		Checksum: computeChecksum(record.record),
-	}
-
-	data, err := proto.Marshal(sstrecord)
-	if err != nil {
-		// TODO: handle error
-		panic(err.Error())
-	}
-
-	buffer.Write(binary.LittleEndian.AppendUint32(nil, uint32(len(data))))
-	buffer.Write(data)
-
-	return buffer.Bytes(), nil
+func (sst *SSTables) createSSTableName(cur uint64) string {
+	return fmt.Sprintf("%s/%04d.sst", sst.dir, cur)
 }
 
-func createSSTableName(cur uint64) string {
-	return fmt.Sprintf("%04d.sst", cur)
-}
-
-// merge picks the last two tables, merge them and
-// add back to the list untill there is only one
 func (sst *SSTables) Merge() error {
 
 	h := make(IteratorHeap, 0)
 
 	for _, table := range sst.tables {
-		it := table.it
-		if table.valid && it.Next() {
+		table.it.file.Seek(0, io.SeekStart)
+		if table.valid && table.it.Next() {
 			h = append(h, table.it)
 		}
 	}
@@ -198,18 +167,25 @@ func (sst *SSTables) Merge() error {
 	var lastkey string
 	for h.Len() > 0 {
 		it := heap.Pop(&h).(*SSTableIterator)
-
-		if lastkey != it.key {
-			if it.record.Record.RecordType != pb.RecordType_RECORD_TYPE_DELETE {
-				if _, err := file.Write(it.data); err != nil {
-					return err
-				}
-			}
-			lastkey = it.key
-		}
-
 		if it.Next() {
 			heap.Push(&h, it)
+		}
+
+		if lastkey == it.key {
+			continue
+		}
+
+		lastkey = it.key
+		if it.record.Record.RecordType == pb.RecordType_RECORD_TYPE_DELETE {
+			continue
+		}
+
+		if _, err := serializeUint32(uint32(len(it.data)), file); err != nil {
+			return err
+		}
+
+		if _, err := file.Write(it.data); err != nil {
+			return err
 		}
 	}
 
@@ -217,7 +193,7 @@ func (sst *SSTables) Merge() error {
 	defer sst.mu.Unlock()
 
 	oldTable := sst.tables
-	newName := createSSTableName(0)
+	newName := sst.createSSTableName(0)
 	sst.tables = []*SSTable{
 		{
 			it:       &SSTableIterator{file: file},
@@ -248,7 +224,8 @@ func (sst *SSTables) Search(key string) (string, bool) {
 			return "", false
 		}
 
-		file.Seek(-int64(mapSize), io.SeekCurrent)
+		noff := -int64(mapSize) - 8
+		file.Seek(noff, io.SeekEnd)
 		messagebuff, err := parseKeyoffset(file, mapSize)
 		if err != nil {
 			return "", false
@@ -274,46 +251,4 @@ func (sst *SSTables) Search(key string) (string, bool) {
 	}
 
 	return "", false
-}
-
-func parseSSTableRecord(f *os.File, size uint32) (*pb.SSTableRecord, error) {
-	buffer := make([]byte, size)
-	var record *pb.SSTableRecord
-	err := proto.Unmarshal(buffer, record)
-	if err != nil {
-		return nil, err
-	}
-
-	return record, nil
-}
-
-func parseuint64(f *os.File) (uint64, error) {
-	b := make([]byte, 8)
-	if _, err := f.Read(b); err != nil {
-		return 0, err
-	}
-	return binary.LittleEndian.Uint64(b), nil
-}
-
-func parseuint32(f *os.File) (uint32, error) {
-	b := make([]byte, 4)
-	if _, err := f.Read(b); err != nil {
-		return 0, err
-	}
-	return binary.LittleEndian.Uint32(b), nil
-}
-
-func parseKeyoffset(f *os.File, size uint64) (*pb.SSTableKeyPair, error) {
-	b := make([]byte, size)
-	_, err := f.Read(b)
-	if err != nil {
-		return nil, err
-	}
-
-	var m *pb.SSTableKeyPair
-	err = proto.Unmarshal(b, m)
-	if err != nil {
-		return nil, err
-	}
-	return m, nil
 }

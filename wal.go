@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"sync"
 
 	pb "github.com/bruhugo/protobuf_sstable/gen/go"
@@ -21,17 +20,20 @@ type WAL struct {
 }
 
 func NewWAL(filename string) (*WAL, error) {
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
-	if err != nil {
-		return nil, fmt.Errorf("error to open/create WAL file: %w", err)
-	}
-
 	wal := &WAL{
-		file:     file,
 		filename: filename,
 	}
 
 	return wal, nil
+}
+
+func (w *WAL) Open() error {
+	file, err := os.OpenFile(w.filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
+	if err != nil {
+		return fmt.Errorf("error opening/creating WAL file: %w", err)
+	}
+	w.file = file
+	return nil
 }
 
 func (w *WAL) Close() {
@@ -60,8 +62,9 @@ func (w *WAL) Append(record *pb.Record) error {
 		return fmt.Errorf("error marshaling protobuf WAL entry message: %w", err)
 	}
 
-	size := strconv.FormatInt(int64(len(d)), 10)
-	_, err = buffer.Write([]byte(size))
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, uint32(len(d)))
+	_, err = buffer.Write(b)
 	if err != nil {
 		return fmt.Errorf("error writing to WAL file: %w", err)
 	}
@@ -87,8 +90,7 @@ func (w *WAL) recover(c chan MetaRecord) {
 			break
 		}
 
-		var size uint32
-		err = binary.Read(w.file, binary.LittleEndian, &size)
+		size, err := parseuint32(w.file)
 		if errors.Is(err, io.EOF) {
 			break
 		}
