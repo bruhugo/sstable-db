@@ -70,6 +70,58 @@ func (RecordType) EnumDescriptor() ([]byte, []int) {
 	return file_database_proto_rawDescGZIP(), []int{0}
 }
 
+type ManifestRecordType int32
+
+const (
+	ManifestRecordType_UNKOWN               ManifestRecordType = 0
+	ManifestRecordType_ADD_SSTABLE          ManifestRecordType = 1
+	ManifestRecordType_REMOVE_SSTABLE       ManifestRecordType = 2
+	ManifestRecordType_LAST_SEQUENCE_NUMBER ManifestRecordType = 3
+)
+
+// Enum value maps for ManifestRecordType.
+var (
+	ManifestRecordType_name = map[int32]string{
+		0: "UNKOWN",
+		1: "ADD_SSTABLE",
+		2: "REMOVE_SSTABLE",
+		3: "LAST_SEQUENCE_NUMBER",
+	}
+	ManifestRecordType_value = map[string]int32{
+		"UNKOWN":               0,
+		"ADD_SSTABLE":          1,
+		"REMOVE_SSTABLE":       2,
+		"LAST_SEQUENCE_NUMBER": 3,
+	}
+)
+
+func (x ManifestRecordType) Enum() *ManifestRecordType {
+	p := new(ManifestRecordType)
+	*p = x
+	return p
+}
+
+func (x ManifestRecordType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ManifestRecordType) Descriptor() protoreflect.EnumDescriptor {
+	return file_database_proto_enumTypes[1].Descriptor()
+}
+
+func (ManifestRecordType) Type() protoreflect.EnumType {
+	return &file_database_proto_enumTypes[1]
+}
+
+func (x ManifestRecordType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ManifestRecordType.Descriptor instead.
+func (ManifestRecordType) EnumDescriptor() ([]byte, []int) {
+	return file_database_proto_rawDescGZIP(), []int{1}
+}
+
 type Record struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Key            string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -287,11 +339,10 @@ func (x *SSTableRecord) GetChecksum() uint32 {
 }
 
 type ManifestContent struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	LastSequenceNumber uint64                 `protobuf:"varint,1,opt,name=last_sequence_number,json=lastSequenceNumber,proto3" json:"last_sequence_number,omitempty"`
-	Files              []string               `protobuf:"bytes,2,rep,name=files,proto3" json:"files,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Records       []*ManifestRecord      `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ManifestContent) Reset() {
@@ -324,18 +375,71 @@ func (*ManifestContent) Descriptor() ([]byte, []int) {
 	return file_database_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *ManifestContent) GetLastSequenceNumber() uint64 {
+func (x *ManifestContent) GetRecords() []*ManifestRecord {
 	if x != nil {
-		return x.LastSequenceNumber
-	}
-	return 0
-}
-
-func (x *ManifestContent) GetFiles() []string {
-	if x != nil {
-		return x.Files
+		return x.Records
 	}
 	return nil
+}
+
+type ManifestRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          ManifestRecordType     `protobuf:"varint,1,opt,name=type,proto3,enum=database.ManifestRecordType" json:"type,omitempty"`
+	Filename      string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`  // only used in types 1 and 2
+	Sequence      uint64                 `protobuf:"varint,3,opt,name=sequence,proto3" json:"sequence,omitempty"` // only used in type 3
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManifestRecord) Reset() {
+	*x = ManifestRecord{}
+	mi := &file_database_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManifestRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManifestRecord) ProtoMessage() {}
+
+func (x *ManifestRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_database_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManifestRecord.ProtoReflect.Descriptor instead.
+func (*ManifestRecord) Descriptor() ([]byte, []int) {
+	return file_database_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ManifestRecord) GetType() ManifestRecordType {
+	if x != nil {
+		return x.Type
+	}
+	return ManifestRecordType_UNKOWN
+}
+
+func (x *ManifestRecord) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *ManifestRecord) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 var File_database_proto protoreflect.FileDescriptor
@@ -359,15 +463,24 @@ const file_database_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"U\n" +
 	"\rSSTableRecord\x12(\n" +
 	"\x06record\x18\x01 \x01(\v2\x10.database.RecordR\x06record\x12\x1a\n" +
-	"\bchecksum\x18\x02 \x01(\rR\bchecksum\"Y\n" +
-	"\x0fManifestContent\x120\n" +
-	"\x14last_sequence_number\x18\x01 \x01(\x04R\x12lastSequenceNumber\x12\x14\n" +
-	"\x05files\x18\x02 \x03(\tR\x05files*S\n" +
+	"\bchecksum\x18\x02 \x01(\rR\bchecksum\"E\n" +
+	"\x0fManifestContent\x122\n" +
+	"\arecords\x18\x01 \x03(\v2\x18.database.ManifestRecordR\arecords\"z\n" +
+	"\x0eManifestRecord\x120\n" +
+	"\x04type\x18\x01 \x01(\x0e2\x1c.database.ManifestRecordTypeR\x04type\x12\x1a\n" +
+	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1a\n" +
+	"\bsequence\x18\x03 \x01(\x04R\bsequence*S\n" +
 	"\n" +
 	"RecordType\x12\x16\n" +
 	"\x12RECORD_TYPE_UNKOWN\x10\x00\x12\x15\n" +
 	"\x11RECORD_TYPE_WRITE\x10\x01\x12\x16\n" +
-	"\x12RECORD_TYPE_DELETE\x10\x02B(Z&github.com/bruhugo/protobuf_sstable;pbb\x06proto3"
+	"\x12RECORD_TYPE_DELETE\x10\x02*_\n" +
+	"\x12ManifestRecordType\x12\n" +
+	"\n" +
+	"\x06UNKOWN\x10\x00\x12\x0f\n" +
+	"\vADD_SSTABLE\x10\x01\x12\x12\n" +
+	"\x0eREMOVE_SSTABLE\x10\x02\x12\x18\n" +
+	"\x14LAST_SEQUENCE_NUMBER\x10\x03B(Z&github.com/bruhugo/protobuf_sstable;pbb\x06proto3"
 
 var (
 	file_database_proto_rawDescOnce sync.Once
@@ -381,27 +494,31 @@ func file_database_proto_rawDescGZIP() []byte {
 	return file_database_proto_rawDescData
 }
 
-var file_database_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_database_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_database_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_database_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_database_proto_goTypes = []any{
 	(RecordType)(0),         // 0: database.RecordType
-	(*Record)(nil),          // 1: database.Record
-	(*WalRecord)(nil),       // 2: database.WalRecord
-	(*SSTableKeyPair)(nil),  // 3: database.SSTableKeyPair
-	(*SSTableRecord)(nil),   // 4: database.SSTableRecord
-	(*ManifestContent)(nil), // 5: database.ManifestContent
-	nil,                     // 6: database.SSTableKeyPair.KeyoffsetEntry
+	(ManifestRecordType)(0), // 1: database.ManifestRecordType
+	(*Record)(nil),          // 2: database.Record
+	(*WalRecord)(nil),       // 3: database.WalRecord
+	(*SSTableKeyPair)(nil),  // 4: database.SSTableKeyPair
+	(*SSTableRecord)(nil),   // 5: database.SSTableRecord
+	(*ManifestContent)(nil), // 6: database.ManifestContent
+	(*ManifestRecord)(nil),  // 7: database.ManifestRecord
+	nil,                     // 8: database.SSTableKeyPair.KeyoffsetEntry
 }
 var file_database_proto_depIdxs = []int32{
 	0, // 0: database.Record.record_type:type_name -> database.RecordType
-	1, // 1: database.WalRecord.record:type_name -> database.Record
-	6, // 2: database.SSTableKeyPair.keyoffset:type_name -> database.SSTableKeyPair.KeyoffsetEntry
-	1, // 3: database.SSTableRecord.record:type_name -> database.Record
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2, // 1: database.WalRecord.record:type_name -> database.Record
+	8, // 2: database.SSTableKeyPair.keyoffset:type_name -> database.SSTableKeyPair.KeyoffsetEntry
+	2, // 3: database.SSTableRecord.record:type_name -> database.Record
+	7, // 4: database.ManifestContent.records:type_name -> database.ManifestRecord
+	1, // 5: database.ManifestRecord.type:type_name -> database.ManifestRecordType
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_database_proto_init() }
@@ -414,8 +531,8 @@ func file_database_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_database_proto_rawDesc), len(file_database_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   6,
+			NumEnums:      2,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

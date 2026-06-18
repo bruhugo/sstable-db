@@ -31,7 +31,18 @@ message SSTableRecord {
 }
 
 message ManifestContent {
-    uint64 last_sequence_number = 1;
-    repeated string files = 2;
+    repeated ManifestRecord records = 1;
 }
 
+enum ManifestRecordType {
+    UNKOWN = 0;
+    ADD_SSTABLE = 1;
+    REMOVE_SSTABLE = 2;
+    LAST_SEQUENCE_NUMBER = 3;
+}
+
+message ManifestRecord {
+    ManifestRecordType type = 1;
+    string filename = 2;            // only used in types 1 and 2
+    uint64 sequence = 3;            // only used in type 3
+}

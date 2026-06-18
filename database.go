@@ -1,11 +1,8 @@
 package protobuf_sstable
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
-	"hash/fnv"
 	"os"
 	"sync"
 	"time"
@@ -17,6 +14,7 @@ type Database struct {
 	wal                 *WAL
 	memt                *Memtable
 	sstables            *SSTables
+	manifest            Manifest
 	entrySequenceNumber uint64
 	mu                  sync.Mutex
 	dir                 string
@@ -50,21 +48,22 @@ func SetMemtableTreshold(t uint64) DatabaseDecorator {
 
 func SetDirectory(path string) DatabaseDecorator {
 	return func(d *Database) {
-		d.dir = path
+		d.sstables.dir = d.dir
 	}
 }
 
+const DEFAULT_DB_DIR string = "db"
+
 func NewDatabase(dbDecorators ...DatabaseDecorator) (*Database, error) {
-	wal, err := NewWAL("wal")
-	if err != nil {
-		return nil, fmt.Errorf("error creating WAL: %w", err)
-	}
+	manifest := NewManifestImpl()
+	wal := NewWAL()
 
 	database := &Database{
 		wal:      wal,
 		memt:     NewMemtable(4000),
-		sstables: NewSSTables("database"),
-		dir:      "db",
+		sstables: NewSSTables(DEFAULT_DB_DIR, manifest),
+		manifest: manifest,
+		dir:      DEFAULT_DB_DIR,
 	}
 
 	for _, d := range dbDecorators {
@@ -77,23 +76,16 @@ func NewDatabase(dbDecorators ...DatabaseDecorator) (*Database, error) {
 		}
 	}
 
-	database.wal.filename = database.dir + "/" + database.wal.filename
-	database.sstables.dir = database.dir
-
-	if err = wal.Open(); err != nil {
+	if err := wal.Open(database.dir); err != nil {
+		return nil, err
+	}
+	if err := manifest.Open(database.dir); err != nil {
 		return nil, err
 	}
 
-	c := make(chan MetaRecord, 10)
-	go wal.recover(c)
-
-	for {
-		record, ok := <-c
-		if !ok {
-			break
-		}
-
-		database.memt.Add(record)
+	err := database.recover()
+	if err != nil {
+		return nil, fmt.Errorf("error while recovering state: %w", err)
 	}
 
 	go database.MergeAsync(context.Background())
@@ -101,7 +93,37 @@ func NewDatabase(dbDecorators ...DatabaseDecorator) (*Database, error) {
 	return database, nil
 }
 
+func (d *Database) recover() error {
+	recoverData, err := d.manifest.Recover()
+	if err != nil {
+		return err
+	}
+
+	err = d.sstables.recoverSSTables(recoverData.sstables...)
+	if err != nil {
+		return err
+	}
+
+	d.entrySequenceNumber = recoverData.lastSequenceNumber
+
+	c := make(chan MetaRecord, 10)
+	go d.wal.recover(c)
+
+	for {
+		record, ok := <-c
+		if !ok {
+			break
+		}
+
+		d.entrySequenceNumber = record.record.SequenceNumber
+		d.memt.Add(record)
+	}
+
+	return nil
+}
+
 func (d *Database) Append(key, value string) error {
+	// replace with atomic incrementer without locks
 	d.mu.Lock()
 	sequenceNumber := d.entrySequenceNumber
 	d.entrySequenceNumber++
@@ -147,19 +169,6 @@ func (d *Database) Get(key string) (string, error) {
 
 func (d *Database) Delete(key string) error {
 	return nil
-}
-
-func computeChecksum(r *pb.Record) uint32 {
-	var buf bytes.Buffer
-
-	binary.Write(&buf, binary.LittleEndian, r.Key)
-	binary.Write(&buf, binary.LittleEndian, r.Value)
-	binary.Write(&buf, binary.LittleEndian, r.SequenceNumber)
-
-	h := fnv.New32a()
-	h.Write(buf.Bytes())
-
-	return h.Sum32()
 }
 
 // merge sstables async

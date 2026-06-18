@@ -14,21 +14,16 @@ import (
 )
 
 type WAL struct {
-	file     *os.File
-	filename string
-	mu       sync.RWMutex
+	file *os.File
+	mu   sync.RWMutex
 }
 
-func NewWAL(filename string) (*WAL, error) {
-	wal := &WAL{
-		filename: filename,
-	}
-
-	return wal, nil
+func NewWAL() *WAL {
+	return &WAL{}
 }
 
-func (w *WAL) Open() error {
-	file, err := os.OpenFile(w.filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
+func (w *WAL) Open(dir string) error {
+	file, err := os.OpenFile(fmt.Sprintf("%s/wal", dir), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("error opening/creating WAL file: %w", err)
 	}

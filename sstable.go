@@ -95,11 +95,13 @@ type SSTables struct {
 	mu             sync.RWMutex
 	dir            string
 	sequenceNumber uint64
+	manifest       Manifest
 }
 
-func NewSSTables(dir string) *SSTables {
+func NewSSTables(dir string, manifest Manifest) *SSTables {
 	return &SSTables{
-		dir: dir,
+		dir:      dir,
+		manifest: manifest,
 	}
 }
 
@@ -122,7 +124,9 @@ func (sst *SSTables) CreateSSTable(mrs []MetaRecord) error {
 
 	buffer := bufio.NewWriter(file)
 	var offset uint64 = 0
+	var latestSequenceNumber uint64 = 0
 	for _, mr := range mrs {
+		latestSequenceNumber = max(latestSequenceNumber, mr.record.SequenceNumber)
 		w, err := serializeSSTableRecord(mr, buffer)
 		if err != nil {
 			return err
@@ -135,9 +139,36 @@ func (sst *SSTables) CreateSSTable(mrs []MetaRecord) error {
 		return err
 	}
 
+	if err := sst.manifest.LatestSequenceNumber(latestSequenceNumber); err != nil {
+		return err
+	}
+
+	if err := sst.manifest.AddSSTable(filename); err != nil {
+		return err
+	}
+
 	buffer.Flush()
 
 	t.valid = true
+	return nil
+}
+
+func (sst *SSTables) recoverSSTables(sstables ...string) error {
+	for _, tablename := range sstables {
+		file, err := os.OpenFile(tablename, os.O_APPEND|os.O_RDWR, 0600)
+		if err != nil {
+			return fmt.Errorf("error opening recovered sstable: %w", err)
+		}
+
+		table := &SSTable{
+			filename: tablename,
+			it: &SSTableIterator{
+				file: file,
+			},
+		}
+
+		sst.tables = append(sst.tables, table)
+	}
 
 	return nil
 }
@@ -202,6 +233,7 @@ func (sst *SSTables) Merge() error {
 	}
 
 	for _, table := range oldTable {
+		sst.manifest.RemoveSSTable(table.filename)
 		os.Remove(table.filename)
 	}
 

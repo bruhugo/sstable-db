@@ -1,10 +1,12 @@
 package protobuf_sstable
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
-	"os"
 
 	pb "github.com/bruhugo/protobuf_sstable/gen/go"
 	"google.golang.org/protobuf/proto"
@@ -56,14 +58,33 @@ func serializeSSTableRecord(record MetaRecord, f io.Writer) (int, error) {
 	return headerw + dataw, nil
 }
 
-func serializeUint32(n uint32, f *os.File) (int, error) {
+func serializeUint32(n uint32, f io.Writer) (int, error) {
 	return f.Write(binary.LittleEndian.AppendUint32(nil, n))
 }
 
-func parseSSTableRecord(f *os.File, size uint32) (*pb.SSTableRecord, error) {
+func serializeManifestRecord(record *pb.ManifestRecord, f io.Writer) (int, error) {
+	d, err := proto.Marshal(record)
+	if err != nil {
+		return 0, fmt.Errorf("error marshaling manifest record: %w", err)
+	}
+
+	nw, err := serializeUint32(uint32(len(d)), f)
+	if err != nil {
+		return nw, fmt.Errorf("error writing to manifest file: %w", err)
+	}
+
+	rw, err := f.Write(d)
+	if err != nil {
+		return nw + rw, fmt.Errorf("error writing to manifest file: %w", err)
+	}
+
+	return nw + rw, nil
+}
+
+func parseSSTableRecord(f io.Reader, size uint32) (*pb.SSTableRecord, error) {
 	buffer := make([]byte, size)
-	if _, err := f.Read(buffer); err != nil {
-		return nil, fmt.Errorf("error reading from sstable file")
+	if _, err := io.ReadFull(f, buffer); err != nil {
+		return nil, fmt.Errorf("error reading from sstable file: %w", err)
 	}
 	record := &pb.SSTableRecord{}
 	err := proto.Unmarshal(buffer, record)
@@ -74,25 +95,25 @@ func parseSSTableRecord(f *os.File, size uint32) (*pb.SSTableRecord, error) {
 	return record, nil
 }
 
-func parseuint64(f *os.File) (uint64, error) {
+func parseuint64(f io.Reader) (uint64, error) {
 	b := make([]byte, 8)
-	if _, err := f.Read(b); err != nil {
+	if _, err := io.ReadFull(f, b); err != nil {
 		return 0, err
 	}
 	return binary.LittleEndian.Uint64(b), nil
 }
 
-func parseuint32(f *os.File) (uint32, error) {
+func parseuint32(f io.Reader) (uint32, error) {
 	b := make([]byte, 4)
-	if _, err := f.Read(b); err != nil {
+	if _, err := io.ReadFull(f, b); err != nil {
 		return 0, err
 	}
 	return binary.LittleEndian.Uint32(b), nil
 }
 
-func parseKeyoffset(f *os.File, size uint64) (*pb.SSTableKeyPair, error) {
+func parseKeyoffset(f io.Reader, size uint64) (*pb.SSTableKeyPair, error) {
 	b := make([]byte, size)
-	_, err := f.Read(b)
+	_, err := io.ReadFull(f, b)
 	if err != nil {
 		return nil, err
 	}
@@ -103,4 +124,54 @@ func parseKeyoffset(f *os.File, size uint64) (*pb.SSTableKeyPair, error) {
 		return nil, err
 	}
 	return m, nil
+}
+
+// ReadSeekTruncater represents an interface that satisfies io.ReadSeeker and has a Truncate method.
+type ReadSeekTruncater interface {
+	io.ReadSeeker
+	Truncate(size int64) error
+}
+
+func parseManifestRecords(f ReadSeekTruncater) ([]*pb.ManifestRecord, error) {
+
+	list := make([]*pb.ManifestRecord, 0)
+	var offset int64 = 0
+	f.Seek(0, io.SeekStart)
+	size, err := parseuint32(f)
+	for ; err == nil; size, err = parseuint32(f) {
+		b := make([]byte, size)
+
+		record := &pb.ManifestRecord{}
+		err := proto.Unmarshal(b, record)
+		if err != nil {
+			break
+		}
+
+		list = append(list, record)
+		newOffset, err := f.Seek(0, io.SeekCurrent)
+		if err != nil {
+			break
+		}
+
+		offset = newOffset
+	}
+
+	if errors.Is(err, io.EOF) {
+		return list, nil
+	}
+	f.Truncate(offset)
+	return nil, err
+}
+
+func computeChecksum(r *pb.Record) uint32 {
+	var buf bytes.Buffer
+
+	binary.Write(&buf, binary.LittleEndian, r.Key)
+	binary.Write(&buf, binary.LittleEndian, r.Value)
+	binary.Write(&buf, binary.LittleEndian, r.SequenceNumber)
+
+	h := fnv.New32a()
+	h.Write(buf.Bytes())
+
+	return h.Sum32()
 }
