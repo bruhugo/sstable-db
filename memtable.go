@@ -45,20 +45,19 @@ func (mem *Memtable) Search(key string) (string, bool) {
 	if !ok {
 		// get the idle tree while in the lock
 		idleTree := mem.GetIdleTree()
+
+		// release lock since idle tree doesnt need one
 		mem.mu.Unlock()
+
 		v, ok = idleTree.Get(key)
 		if !ok {
-			mem.mu.Unlock()
 			return "", false
 		}
+		return v.(*pb.Record).Value, true
 	}
+	mem.mu.Unlock()
 
-	record, ok := v.(*pb.Record)
-	if !ok {
-		return "", false
-	}
-
-	return record.Value, true
+	return v.(*pb.Record).Value, true
 }
 
 // adds the metarecord to the memtable and return
@@ -83,7 +82,7 @@ func (mem *Memtable) GetValuesAndSwitch() ([]*pb.Record, TreeHandle) {
 	for _, r := range mem.GetCurrentTree().Values() {
 		mt, ok := r.(*pb.Record)
 		if !ok {
-			panic("value stored in rbt is not a metarecord")
+			panic("value stored in rbt is not a record")
 		}
 
 		records = append(records, mt)

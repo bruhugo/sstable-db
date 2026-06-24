@@ -190,7 +190,7 @@ func parseWALRecord(f io.Reader) (*pb.WalRecord, error) {
 	}
 
 	data := make([]byte, size)
-	_, err = f.Read(data)
+	_, err = io.ReadFull(f, data)
 	if err != nil {
 		return nil, err
 	}
@@ -199,6 +199,10 @@ func parseWALRecord(f io.Reader) (*pb.WalRecord, error) {
 	err = proto.Unmarshal(data, record)
 	if err != nil {
 		return nil, err
+	}
+
+	if record.Record == nil {
+		return nil, fmt.Errorf("WAL record is empty or corrupt (missing Record field)")
 	}
 
 	if record.Checksum != computeChecksum(record.Record) {

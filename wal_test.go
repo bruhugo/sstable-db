@@ -42,7 +42,9 @@ func TestClearWAL(t *testing.T) {
 		}
 	}
 
-	wal.Clear()
+	if err := wal.Clear(); err != nil {
+		t.Errorf("error while clearing WAL: %s", err.Error())
+	}
 	_, err := wal.file.Read(make([]byte, 1))
 	if err == nil {
 		t.Error("clearing WAL expected EOF, but go nothing")
@@ -54,6 +56,7 @@ func TestClearWAL(t *testing.T) {
 }
 
 func TestRecoverWAL(t *testing.T) {
+	wal.Clear()
 	tb := newRecordList()
 
 	for _, record := range tb {
@@ -66,6 +69,7 @@ func TestRecoverWAL(t *testing.T) {
 }
 
 func TestAppendConcurrentWAL(t *testing.T) {
+	wal.Clear()
 	tb := newRecordList()
 
 	var wg sync.WaitGroup

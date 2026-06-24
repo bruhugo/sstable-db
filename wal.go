@@ -46,6 +46,10 @@ func (w *WAL) Clear() error {
 	if err != nil {
 		return fmt.Errorf("error truncating wal file: %w", err)
 	}
+	_, err = w.file.Seek(0, io.SeekStart)
+	if err != nil {
+		return fmt.Errorf("error seeking to start of wal file: %w", err)
+	}
 	return nil
 }
 
