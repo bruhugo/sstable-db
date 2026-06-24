@@ -33,13 +33,12 @@ func serializeKeyoffset(ko *pb.SSTableKeyPair, f io.Writer) (int, error) {
 	return kodw + lenw, nil
 }
 
-func serializeSSTableRecord(record MetaRecord, f io.Writer) (int, error) {
-	sstrecord := &pb.SSTableRecord{
-		Record:   record.record,
-		Checksum: computeChecksum(record.record),
+func serializeSSTableRecord(record *pb.Record, f io.Writer) (int, error) {
+	sstablerecord := &pb.SSTableRecord{
+		Record:   record,
+		Checksum: computeChecksum(record),
 	}
-
-	data, err := proto.Marshal(sstrecord)
+	data, err := proto.Marshal(sstablerecord)
 	if err != nil {
 		// TODO: handle error
 		panic(err.Error())
@@ -184,7 +183,7 @@ func parseManifestRecords(f ReadSeekTruncater) ([]*pb.ManifestRecord, error) {
 	return nil, err
 }
 
-func parseWALRecordToMetaRecord(f io.Reader) (*MetaRecord, error) {
+func parseWALRecord(f io.Reader) (*pb.WalRecord, error) {
 	size, err := parseuint32(f)
 	if err != nil {
 		return nil, err
@@ -206,10 +205,7 @@ func parseWALRecordToMetaRecord(f io.Reader) (*MetaRecord, error) {
 		return nil, fmt.Errorf("checkum does not match with record content")
 	}
 
-	return &MetaRecord{
-		record: record.Record,
-		size:   size,
-	}, nil
+	return record, nil
 }
 
 func computeChecksum(r *pb.Record) uint32 {

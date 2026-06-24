@@ -2,9 +2,10 @@ package protobuf_sstable
 
 import (
 	"sync"
-	"unsafe"
 
+	pb "github.com/bruhugo/protobuf_sstable/gen/go"
 	rbt "github.com/emirpasic/gods/trees/redblacktree"
+	"google.golang.org/protobuf/proto"
 )
 
 type TreeHandle uint8
@@ -52,44 +53,35 @@ func (mem *Memtable) Search(key string) (string, bool) {
 		}
 	}
 
-	metaRecord, ok := v.(MetaRecord)
+	record, ok := v.(*pb.Record)
 	if !ok {
 		return "", false
 	}
 
-	return metaRecord.record.Value, true
+	return record.Value, true
 }
 
 // adds the metarecord to the memtable and return
 // if a the threshold was met or not
-func (mem *Memtable) Add(mr *MetaRecord) bool {
+func (mem *Memtable) Add(record *pb.Record) bool {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
 
-	mem.GetCurrentTree().Put(mr.record.Key, mr)
-	mem.size[mem.currentTree] += GetRecordSize(mr)
+	mem.GetCurrentTree().Put(record.Key, record)
+	mem.size[mem.currentTree] += uint64(proto.Size(record))
 	return mem.size[mem.currentTree] >= mem.treshold
-}
-
-// Estimates the record size. It's enough for the memtable,
-// since it doesn't need to be precise
-func GetRecordSize(r *MetaRecord) uint64 {
-	return uint64(len(r.record.Key)) +
-		uint64(len(r.record.Value)) +
-		uint64(unsafe.Sizeof(r.record.SequenceNumber)) +
-		uint64(unsafe.Sizeof(r.record.SequenceNumber))
 }
 
 // returns the list of metarecords and a handle used to clear the tree
 // when you are done flushing to disk
-func (mem *Memtable) GetValuesAndSwitch() ([]MetaRecord, TreeHandle) {
+func (mem *Memtable) GetValuesAndSwitch() ([]*pb.Record, TreeHandle) {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
 
-	records := make([]MetaRecord, 0)
+	records := make([]*pb.Record, 0)
 
 	for _, r := range mem.GetCurrentTree().Values() {
-		mt, ok := r.(MetaRecord)
+		mt, ok := r.(*pb.Record)
 		if !ok {
 			panic("value stored in rbt is not a metarecord")
 		}
@@ -110,12 +102,12 @@ func (mem *Memtable) ClearTree(handle TreeHandle) {
 	mem.trees[handle].Clear()
 }
 
-func (mem *Memtable) Get(key string) (MetaRecord, bool) {
+func (mem *Memtable) Get(key string) (*pb.Record, bool) {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
 	record, ok := mem.GetCurrentTree().Get(key)
 	if !ok {
-		return MetaRecord{}, false
+		return nil, false
 	}
-	return record.(MetaRecord), true
+	return record.(*pb.Record), true
 }

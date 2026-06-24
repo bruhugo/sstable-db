@@ -105,7 +105,7 @@ func NewSSTables(dir string, manifest Manifest) *SSTables {
 	}
 }
 
-func (sst *SSTables) CreateSSTable(mrs []MetaRecord) error {
+func (sst *SSTables) CreateSSTable(records []*pb.Record) error {
 	sst.mu.Lock()
 	filename := sst.createSSTableName(sst.sequenceNumber)
 	sst.sequenceNumber++
@@ -125,13 +125,13 @@ func (sst *SSTables) CreateSSTable(mrs []MetaRecord) error {
 	buffer := bufio.NewWriter(file)
 	var offset uint64 = 0
 	var latestSequenceNumber uint64 = 0
-	for _, mr := range mrs {
-		latestSequenceNumber = max(latestSequenceNumber, mr.record.SequenceNumber)
-		w, err := serializeSSTableRecord(mr, buffer)
+	for _, record := range records {
+		latestSequenceNumber = max(latestSequenceNumber, record.SequenceNumber)
+		w, err := serializeSSTableRecord(record, buffer)
 		if err != nil {
 			return err
 		}
-		ko.Keyoffset[mr.record.Key] = offset
+		ko.Keyoffset[record.Key] = offset
 		offset += uint64(w)
 	}
 

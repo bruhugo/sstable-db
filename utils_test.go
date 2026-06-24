@@ -105,24 +105,24 @@ func TestParseWALRecordToMetaRecord(t *testing.T) {
 	}
 
 	data := bytes.Clone(reader.Bytes())
-	parsed, err := parseWALRecordToMetaRecord(reader)
+	parsed, err := parseWALRecord(reader)
 	if err != nil {
 		t.Fatalf("unexpected error parsing wal record: %v", err)
 	}
 
-	if !proto.Equal(original.Record, parsed.record) {
+	if !proto.Equal(original.Record, parsed.Record) {
 		t.Errorf("parsed wal record doesn't match original.\nGot:  %+v\nWant: %+v", parsed, original)
 	}
 
 	readerShort := bytes.NewReader(data[0 : len(data)-1])
-	_, err = parseWALRecordToMetaRecord(readerShort)
+	_, err = parseWALRecord(readerShort)
 	if err == nil {
 		t.Error("expected error due to short read, but got nil")
 	}
 
 	invalidData := []byte{0xff, 0xff, 0xff}
 	readerInvalid := bytes.NewReader(invalidData)
-	_, err = parseWALRecordToMetaRecord(readerInvalid)
+	_, err = parseWALRecord(readerInvalid)
 	if err == nil {
 		t.Error("expected error due to invalid protobuf data, but got nil")
 	}

@@ -64,7 +64,7 @@ func (w *WAL) Append(record *pb.Record) error {
 	return nil
 }
 
-func (w *WAL) recover(c chan *MetaRecord) {
+func (w *WAL) recover(c chan *pb.Record) {
 	defer close(c)
 	w.file.Seek(0, io.SeekStart)
 	for {
@@ -73,7 +73,7 @@ func (w *WAL) recover(c chan *MetaRecord) {
 			break
 		}
 
-		record, err := parseWALRecordToMetaRecord(w.file)
+		record, err := parseWALRecord(w.file)
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
 				w.file.Truncate(offset)
@@ -81,6 +81,6 @@ func (w *WAL) recover(c chan *MetaRecord) {
 			break
 		}
 
-		c <- record
+		c <- record.Record
 	}
 }

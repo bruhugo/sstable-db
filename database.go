@@ -22,19 +22,13 @@ type Database struct {
 
 // MetaRecord is what is used between WalRecords and
 // SSTableRecords in the program
-type MetaRecord struct {
-	size   uint32
-	record *pb.Record
-}
 
-func NewMetaRecord(key, value string, sequenceNumber uint64) *MetaRecord {
-	return &MetaRecord{
-		record: &pb.Record{
-			Key:            key,
-			Value:          value,
-			SequenceNumber: sequenceNumber,
-			RecordType:     pb.RecordType_RECORD_TYPE_WRITE,
-		},
+func NewRecord(key, value string, sequenceNumber uint64) *pb.Record {
+	return &pb.Record{
+		Key:            key,
+		Value:          value,
+		SequenceNumber: sequenceNumber,
+		RecordType:     pb.RecordType_RECORD_TYPE_WRITE,
 	}
 }
 
@@ -106,7 +100,7 @@ func (d *Database) recover() error {
 
 	d.entrySequenceNumber = recoverData.lastSequenceNumber
 
-	c := make(chan *MetaRecord, 10)
+	c := make(chan *pb.Record, 10)
 	go d.wal.recover(c)
 
 	for {
@@ -115,7 +109,7 @@ func (d *Database) recover() error {
 			break
 		}
 
-		d.entrySequenceNumber = record.record.SequenceNumber
+		d.entrySequenceNumber = record.SequenceNumber
 		d.memt.Add(record)
 	}
 
@@ -129,14 +123,13 @@ func (d *Database) Append(key, value string) error {
 	d.entrySequenceNumber++
 	d.mu.Unlock()
 
-	mr := NewMetaRecord(key, value, sequenceNumber)
-	if err := d.wal.Append(mr.record); err != nil {
+	record := NewRecord(key, value, sequenceNumber)
+	if err := d.wal.Append(record); err != nil {
 		// TODO: handle error
 		panic(err)
 	}
 
-	// memtable is full
-	if d.memt.Add(mr) {
+	if d.memt.Add(record) { // is memtable full after add?
 		values, handle := d.memt.GetValuesAndSwitch()
 		err := d.sstables.CreateSSTable(values)
 		if err != nil {
@@ -154,9 +147,9 @@ func (d *Database) Append(key, value string) error {
 
 func (d *Database) Get(key string) (string, error) {
 	// TODO: finish implementing that, make it search in the sstables too
-	metarecord, ok := d.memt.Get(key)
+	record, ok := d.memt.Get(key)
 	if ok {
-		return metarecord.record.Value, nil
+		return record.Value, nil
 	}
 
 	value, ok := d.sstables.Search(key)

@@ -80,7 +80,7 @@ func TestAppendConcurrentWAL(t *testing.T) {
 	}
 	wg.Wait()
 
-	c := make(chan *MetaRecord)
+	c := make(chan *pb.Record)
 	go wal.recover(c)
 	read := 0
 	for {
@@ -97,7 +97,7 @@ func TestAppendConcurrentWAL(t *testing.T) {
 }
 
 func recoverTestWal(t *testing.T, tb []*pb.Record) {
-	c := make(chan *MetaRecord)
+	c := make(chan *pb.Record)
 	go wal.recover(c)
 	read := 0
 	for {
@@ -106,8 +106,8 @@ func recoverTestWal(t *testing.T, tb []*pb.Record) {
 			break
 		}
 
-		if !proto.Equal(record.record, tb[read]) {
-			t.Errorf("expected recovered entry %+v, but got %+v", tb[read], record.record)
+		if !proto.Equal(record, tb[read]) {
+			t.Errorf("expected recovered entry %+v, but got %+v", tb[read], record)
 		}
 
 		read++
