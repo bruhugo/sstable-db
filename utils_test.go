@@ -85,3 +85,45 @@ func TestParseKeyoffset(t *testing.T) {
 		t.Error("expected error due to invalid protobuf data, but got nil")
 	}
 }
+
+func TestParseWALRecordToMetaRecord(t *testing.T) {
+	original := &pb.WalRecord{
+		Record: &pb.Record{
+			Key:            "key",
+			Value:          "value",
+			SequenceNumber: 1,
+			RecordType:     pb.RecordType_RECORD_TYPE_WRITE,
+		},
+	}
+
+	original.Checksum = computeChecksum(original.Record)
+
+	reader := bytes.NewBuffer(make([]byte, 0))
+	_, err := serializeWALRecord(original, reader)
+	if err != nil {
+		t.Fatalf("failed to marshal original wal record: %v", err)
+	}
+
+	data := bytes.Clone(reader.Bytes())
+	parsed, err := parseWALRecordToMetaRecord(reader)
+	if err != nil {
+		t.Fatalf("unexpected error parsing wal record: %v", err)
+	}
+
+	if !proto.Equal(original.Record, parsed.record) {
+		t.Errorf("parsed wal record doesn't match original.\nGot:  %+v\nWant: %+v", parsed, original)
+	}
+
+	readerShort := bytes.NewReader(data[0 : len(data)-1])
+	_, err = parseWALRecordToMetaRecord(readerShort)
+	if err == nil {
+		t.Error("expected error due to short read, but got nil")
+	}
+
+	invalidData := []byte{0xff, 0xff, 0xff}
+	readerInvalid := bytes.NewReader(invalidData)
+	_, err = parseWALRecordToMetaRecord(readerInvalid)
+	if err == nil {
+		t.Error("expected error due to invalid protobuf data, but got nil")
+	}
+}

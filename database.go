@@ -106,7 +106,7 @@ func (d *Database) recover() error {
 
 	d.entrySequenceNumber = recoverData.lastSequenceNumber
 
-	c := make(chan MetaRecord, 10)
+	c := make(chan *MetaRecord, 10)
 	go d.wal.recover(c)
 
 	for {
@@ -136,7 +136,7 @@ func (d *Database) Append(key, value string) error {
 	}
 
 	// memtable is full
-	if d.memt.Add(*mr) {
+	if d.memt.Add(mr) {
 		values, handle := d.memt.GetValuesAndSwitch()
 		err := d.sstables.CreateSSTable(values)
 		if err != nil {

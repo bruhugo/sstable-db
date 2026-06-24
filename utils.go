@@ -58,6 +58,27 @@ func serializeSSTableRecord(record MetaRecord, f io.Writer) (int, error) {
 	return headerw + dataw, nil
 }
 
+func serializeWALRecord(record *pb.WalRecord, f io.Writer) (int, error) {
+	d, err := proto.Marshal(record)
+	if err != nil {
+		return 0, fmt.Errorf("error marshaling protobuf WAL entry message: %w", err)
+	}
+
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, uint32(len(d)))
+	iw, err := f.Write(b)
+	if err != nil {
+		return iw, fmt.Errorf("error writing to WAL file: %w", err)
+	}
+
+	rw, err := f.Write(d)
+	if err != nil {
+		return rw + iw, fmt.Errorf("error writing to WAL file: %w", err)
+	}
+
+	return rw + iw, nil
+}
+
 func serializeUint32(n uint32, f io.Writer) (int, error) {
 	return f.Write(binary.LittleEndian.AppendUint32(nil, n))
 }
@@ -161,6 +182,34 @@ func parseManifestRecords(f ReadSeekTruncater) ([]*pb.ManifestRecord, error) {
 	}
 	f.Truncate(offset)
 	return nil, err
+}
+
+func parseWALRecordToMetaRecord(f io.Reader) (*MetaRecord, error) {
+	size, err := parseuint32(f)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make([]byte, size)
+	_, err = f.Read(data)
+	if err != nil {
+		return nil, err
+	}
+
+	record := &pb.WalRecord{}
+	err = proto.Unmarshal(data, record)
+	if err != nil {
+		return nil, err
+	}
+
+	if record.Checksum != computeChecksum(record.Record) {
+		return nil, fmt.Errorf("checkum does not match with record content")
+	}
+
+	return &MetaRecord{
+		record: record.Record,
+		size:   size,
+	}, nil
 }
 
 func computeChecksum(r *pb.Record) uint32 {

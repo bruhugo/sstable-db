@@ -62,12 +62,12 @@ func (mem *Memtable) Search(key string) (string, bool) {
 
 // adds the metarecord to the memtable and return
 // if a the threshold was met or not
-func (mem *Memtable) Add(mr MetaRecord) bool {
+func (mem *Memtable) Add(mr *MetaRecord) bool {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
 
 	mem.GetCurrentTree().Put(mr.record.Key, mr)
-	mem.size[mem.currentTree] += GetRecordSize(&mr)
+	mem.size[mem.currentTree] += GetRecordSize(mr)
 	return mem.size[mem.currentTree] >= mem.treshold
 }
 
