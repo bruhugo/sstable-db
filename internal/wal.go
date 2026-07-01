@@ -1,4 +1,4 @@
-package protobuf_sstable
+package db
 
 import (
 	"bufio"
@@ -68,7 +68,7 @@ func (w *WAL) Append(record *pb.Record) error {
 	return nil
 }
 
-func (w *WAL) recover(c chan *pb.Record) {
+func (w *WAL) Recover(c chan *pb.Record) {
 	defer close(c)
 	w.file.Seek(0, io.SeekStart)
 	for {

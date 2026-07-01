@@ -1,4 +1,4 @@
-package protobuf_sstable
+package db
 
 import (
 	"fmt"
@@ -22,8 +22,8 @@ type ManifestImpl struct {
 }
 
 type RecoverData struct {
-	sstables           []string
-	lastSequenceNumber uint64
+	SSTables           []string
+	LastSequenceNumber uint64
 }
 
 func NewManifestImpl() *ManifestImpl {
@@ -51,7 +51,7 @@ func (m *ManifestImpl) Recover() (RecoverData, error) {
 	for _, r := range records {
 		switch r.Type {
 		case pb.ManifestRecordType_LAST_SEQUENCE_NUMBER:
-			recoverData.lastSequenceNumber = r.Sequence
+			recoverData.LastSequenceNumber = r.Sequence
 
 		case pb.ManifestRecordType_ADD_SSTABLE:
 			set[r.Filename] = struct{}{}
@@ -62,7 +62,7 @@ func (m *ManifestImpl) Recover() (RecoverData, error) {
 	}
 
 	for k := range set {
-		recoverData.sstables = append(recoverData.sstables, k)
+		recoverData.SSTables = append(recoverData.SSTables, k)
 	}
 
 	return recoverData, nil

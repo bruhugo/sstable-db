@@ -1,4 +1,4 @@
-package protobuf_sstable
+package db
 
 import (
 	"io"
@@ -85,7 +85,7 @@ func TestAppendConcurrentWAL(t *testing.T) {
 	wg.Wait()
 
 	c := make(chan *pb.Record)
-	go wal.recover(c)
+	go wal.Recover(c)
 	read := 0
 	for {
 		_, ok := <-c
@@ -102,7 +102,7 @@ func TestAppendConcurrentWAL(t *testing.T) {
 
 func recoverTestWal(t *testing.T, tb []*pb.Record) {
 	c := make(chan *pb.Record)
-	go wal.recover(c)
+	go wal.Recover(c)
 	read := 0
 	for {
 		record, ok := <-c

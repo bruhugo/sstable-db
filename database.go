@@ -8,13 +8,14 @@ import (
 	"time"
 
 	pb "github.com/bruhugo/protobuf_sstable/gen/go"
+	db "github.com/bruhugo/protobuf_sstable/internal"
 )
 
 type Database struct {
-	wal                 *WAL
-	memt                *Memtable
-	sstables            *SSTables
-	manifest            Manifest
+	wal                 *db.WAL
+	memt                *db.Memtable
+	sstables            *db.SSTables
+	manifest            db.Manifest
 	entrySequenceNumber uint64
 	mu                  sync.Mutex
 	dir                 string
@@ -23,39 +24,30 @@ type Database struct {
 // MetaRecord is what is used between WalRecords and
 // SSTableRecords in the program
 
-func NewRecord(key, value string, sequenceNumber uint64) *pb.Record {
-	return &pb.Record{
-		Key:            key,
-		Value:          value,
-		SequenceNumber: sequenceNumber,
-		RecordType:     pb.RecordType_RECORD_TYPE_WRITE,
-	}
-}
-
 type DatabaseDecorator func(*Database)
 
 func SetMemtableTreshold(t uint64) DatabaseDecorator {
 	return func(d *Database) {
-		d.memt.treshold = t
+		d.memt.SetTreshold(t)
 	}
 }
 
 func SetDirectory(path string) DatabaseDecorator {
 	return func(d *Database) {
-		d.sstables.dir = d.dir
+		d.sstables.SetDir(path)
 	}
 }
 
 const DEFAULT_DB_DIR string = "db"
 
 func NewDatabase(dbDecorators ...DatabaseDecorator) (*Database, error) {
-	manifest := NewManifestImpl()
-	wal := NewWAL()
+	manifest := db.NewManifestImpl()
+	wal := db.NewWAL()
 
 	database := &Database{
 		wal:      wal,
-		memt:     NewMemtable(4000),
-		sstables: NewSSTables(DEFAULT_DB_DIR, manifest),
+		memt:     db.NewMemtable(4000),
+		sstables: db.NewSSTables(DEFAULT_DB_DIR, manifest),
 		manifest: manifest,
 		dir:      DEFAULT_DB_DIR,
 	}
@@ -93,15 +85,15 @@ func (d *Database) recover() error {
 		return err
 	}
 
-	err = d.sstables.recoverSSTables(recoverData.sstables...)
+	err = d.sstables.RecoverSSTables(recoverData.SSTables...)
 	if err != nil {
 		return err
 	}
 
-	d.entrySequenceNumber = recoverData.lastSequenceNumber
+	d.entrySequenceNumber = recoverData.LastSequenceNumber
 
 	c := make(chan *pb.Record, 10)
-	go d.wal.recover(c)
+	go d.wal.Recover(c)
 
 	for {
 		record, ok := <-c
@@ -123,7 +115,7 @@ func (d *Database) Append(key, value string) error {
 	d.entrySequenceNumber++
 	d.mu.Unlock()
 
-	record := NewRecord(key, value, sequenceNumber)
+	record := db.NewRecord(key, value, sequenceNumber)
 	if err := d.wal.Append(record); err != nil {
 		// TODO: handle error
 		panic(err)

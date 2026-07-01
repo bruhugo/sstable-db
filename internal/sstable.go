@@ -1,4 +1,4 @@
-package protobuf_sstable
+package db
 
 import (
 	"bufio"
@@ -17,13 +17,18 @@ import (
 type RecordSize uint32
 
 type SSTableIterator struct {
-	file   *os.File
-	record *pb.SSTableRecord
-	data   []byte
-	key    string
+	file    *os.File
+	record  *pb.SSTableRecord
+	data    []byte
+	key     string
+	started bool
 }
 
 func (it *SSTableIterator) Next() bool {
+	if !it.started {
+		it.started = true
+		it.file.Seek(0, io.SeekStart)
+	}
 	var size RecordSize
 	err := binary.Read(it.file, binary.LittleEndian, &size)
 	if err != nil {
@@ -91,11 +96,11 @@ func newSSTable(file *os.File) *SSTable {
 }
 
 type SSTables struct {
-	tables         []*SSTable
-	mu             sync.RWMutex
-	dir            string
-	sequenceNumber uint64
-	manifest       Manifest
+	tables              []*SSTable
+	mu                  sync.RWMutex
+	dir                 string
+	tableSequenceNumber uint64
+	manifest            Manifest
 }
 
 func NewSSTables(dir string, manifest Manifest) *SSTables {
@@ -105,10 +110,14 @@ func NewSSTables(dir string, manifest Manifest) *SSTables {
 	}
 }
 
+func (sst *SSTables) SetDir(dir string) {
+	sst.dir = dir
+}
+
 func (sst *SSTables) CreateSSTable(records []*pb.Record) error {
 	sst.mu.Lock()
-	filename := sst.createSSTableName(sst.sequenceNumber)
-	sst.sequenceNumber++
+	filename := sst.createSSTableName(sst.tableSequenceNumber)
+	sst.tableSequenceNumber++
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		panic(err.Error())
@@ -153,7 +162,12 @@ func (sst *SSTables) CreateSSTable(records []*pb.Record) error {
 	return nil
 }
 
-func (sst *SSTables) recoverSSTables(sstables ...string) error {
+func (sst *SSTables) RecoverSSTables(sstables ...string) error {
+	var i uint64 = 0
+	defer func() {
+		sst.tableSequenceNumber = i
+	}()
+
 	for _, tablename := range sstables {
 		file, err := os.OpenFile(tablename, os.O_APPEND|os.O_RDWR, 0600)
 		if err != nil {
@@ -168,6 +182,7 @@ func (sst *SSTables) recoverSSTables(sstables ...string) error {
 		}
 
 		sst.tables = append(sst.tables, table)
+		i++
 	}
 
 	return nil
@@ -190,18 +205,19 @@ func (sst *SSTables) Merge() error {
 
 	heap.Init(&h)
 
-	file, err := os.OpenFile("compressed.sst", os.O_APPEND|os.O_CREATE, 0600)
+	file, err := os.OpenFile(sst.dir+"/compressed.sst", os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
 
+	keyoffset := pb.SSTableKeyPair{
+		Keyoffset: make(map[string]uint64),
+	}
+
 	var lastkey string
+	var offset uint64 = 0
 	for h.Len() > 0 {
 		it := heap.Pop(&h).(*SSTableIterator)
-		if it.Next() {
-			heap.Push(&h, it)
-		}
-
 		if lastkey == it.key {
 			continue
 		}
@@ -218,6 +234,18 @@ func (sst *SSTables) Merge() error {
 		if _, err := file.Write(it.data); err != nil {
 			return err
 		}
+
+		keyoffset.Keyoffset[it.record.Record.Key] = offset
+		offset += uint64(len(it.data) + 4)
+
+		if it.Next() {
+			heap.Push(&h, it)
+		}
+	}
+
+	_, err = serializeKeyoffset(&keyoffset, file)
+	if err != nil {
+		return err
 	}
 
 	sst.mu.Lock()
@@ -225,6 +253,7 @@ func (sst *SSTables) Merge() error {
 
 	oldTable := sst.tables
 	newName := sst.createSSTableName(0)
+	sst.tableSequenceNumber = 1
 	sst.tables = []*SSTable{
 		{
 			it:       &SSTableIterator{file: file},
@@ -238,6 +267,7 @@ func (sst *SSTables) Merge() error {
 	}
 
 	os.Rename(file.Name(), newName)
+	sst.manifest.AddSSTable(newName)
 
 	return nil
 }

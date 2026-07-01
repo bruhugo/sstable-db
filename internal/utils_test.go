@@ -1,4 +1,4 @@
-package protobuf_sstable
+package db
 
 import (
 	"bytes"

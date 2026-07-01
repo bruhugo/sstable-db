@@ -1,4 +1,4 @@
-package protobuf_sstable
+package db
 
 import (
 	"sync"
@@ -27,6 +27,10 @@ func NewMemtable(treshold uint64) *Memtable {
 		currentTree: 0,
 		treshold:    treshold,
 	}
+}
+
+func (memt *Memtable) SetTreshold(t uint64) {
+	memt.treshold = t
 }
 
 // NOT THREAD SAFE!!!

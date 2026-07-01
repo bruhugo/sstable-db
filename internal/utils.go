@@ -1,4 +1,4 @@
-package protobuf_sstable
+package db
 
 import (
 	"bytes"
@@ -11,6 +11,15 @@ import (
 	pb "github.com/bruhugo/protobuf_sstable/gen/go"
 	"google.golang.org/protobuf/proto"
 )
+
+func NewRecord(key, value string, sequenceNumber uint64) *pb.Record {
+	return &pb.Record{
+		Key:            key,
+		Value:          value,
+		SequenceNumber: sequenceNumber,
+		RecordType:     pb.RecordType_RECORD_TYPE_WRITE,
+	}
+}
 
 // serializes the keyoffset table AND its length as uint64 right after
 func serializeKeyoffset(ko *pb.SSTableKeyPair, f io.Writer) (int, error) {
