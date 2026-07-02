@@ -1,9 +1,11 @@
 package db
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
+	pb "github.com/bruhugo/protobuf_sstable/gen/go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -112,4 +114,30 @@ func TestGetValuesAndSwitch(t *testing.T) {
 	if oldValue != oldRecord.Value {
 		t.Errorf("found %s but expected %s", oldValue, oldRecord.Value)
 	}
+}
+
+func BenchmarkAddToMemtable(b *testing.B) {
+	b.ReportAllocs()
+	memtable := NewMemtable(200)
+	b.ResetTimer()
+
+	i := 0
+	for b.Loop() {
+		memtable.Add(&pb.Record{Key: fmt.Sprintf("%d", i), Value: "value1"})
+		i++
+	}
+}
+
+func BenchmarkAddToMemtableParallel(b *testing.B) {
+	b.ReportAllocs()
+	memtable := NewMemtable(200)
+	b.ResetTimer()
+
+	b.RunParallel(func(p *testing.PB) {
+		i := 0
+		for p.Next() {
+			memtable.Add(&pb.Record{Key: fmt.Sprintf("%d", i), Value: "value1"})
+			i++
+		}
+	})
 }

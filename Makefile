@@ -20,5 +20,8 @@ test:
 test-cover:
 	go test -v -cover -coverprofile=c.out ./...
 
-test-cover-html:
-	go tool cover -html=c.out ./...
+test-cover-html: test-cover
+	go tool cover -html=c.out
+
+bench:
+	go test -bench=. ./...

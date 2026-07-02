@@ -3,6 +3,7 @@ package db
 import (
 	"testing"
 
+	pb "github.com/bruhugo/protobuf_sstable/gen/go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -12,10 +13,10 @@ type manifestStub struct {
 func (m manifestStub) Recover() (RecoverData, error) {
 	return RecoverData{}, nil
 }
-func (m manifestStub) LatestSequenceNumber(sequenceNumber uint64) error {
+func (m manifestStub) AddLatestSequenceNumber(sequenceNumber uint64) error {
 	return nil
 }
-func (m manifestStub) AddSSTable(sstable string) error {
+func (m manifestStub) AddSSTablePath(sstable string) error {
 	return nil
 }
 func (m manifestStub) RemoveSSTable(sstable string) error {
@@ -137,5 +138,19 @@ func TestSSTableMerge(t *testing.T) {
 	}
 	if found != records[5].Value {
 		t.Errorf("expected to find value %s but found %s", records[5].Value, found)
+	}
+}
+
+func BenchmarkSSTableCreate(b *testing.B) {
+	b.ReportAllocs()
+	sstable := NewSSTables(b.TempDir(), manifestStub{})
+	records := make([]*pb.Record, 0)
+	for range 1_000 {
+		records = append(records, &pb.Record{Key: "key", Value: "value"})
+	}
+	b.ResetTimer()
+
+	for b.Loop() {
+		sstable.CreateSSTable(records)
 	}
 }

@@ -148,11 +148,11 @@ func (sst *SSTables) CreateSSTable(records []*pb.Record) error {
 		return err
 	}
 
-	if err := sst.manifest.LatestSequenceNumber(latestSequenceNumber); err != nil {
+	if err := sst.manifest.AddLatestSequenceNumber(latestSequenceNumber); err != nil {
 		return err
 	}
 
-	if err := sst.manifest.AddSSTable(filename); err != nil {
+	if err := sst.manifest.AddSSTablePath(filename); err != nil {
 		return err
 	}
 
@@ -267,7 +267,7 @@ func (sst *SSTables) Merge() error {
 	}
 
 	os.Rename(file.Name(), newName)
-	sst.manifest.AddSSTable(newName)
+	sst.manifest.AddSSTablePath(newName)
 
 	return nil
 }

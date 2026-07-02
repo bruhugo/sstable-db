@@ -166,12 +166,16 @@ func parseManifestRecords(f ReadSeekTruncater) ([]*pb.ManifestRecord, error) {
 	list := make([]*pb.ManifestRecord, 0)
 	var offset int64 = 0
 	f.Seek(0, io.SeekStart)
+	buffer := make([]byte, 1024)
 	size, err := parseuint32(f)
 	for ; err == nil; size, err = parseuint32(f) {
-		b := make([]byte, size)
+		b := buffer[:size]
+		if _, err = f.Read(b); err != nil {
+			break
+		}
 
 		record := &pb.ManifestRecord{}
-		err := proto.Unmarshal(b, record)
+		err = proto.Unmarshal(b, record)
 		if err != nil {
 			break
 		}

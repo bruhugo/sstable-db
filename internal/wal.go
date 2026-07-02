@@ -65,6 +65,10 @@ func (w *WAL) Append(record *pb.Record) error {
 		return fmt.Errorf("error flushing buffer to WAL file: %w", err)
 	}
 
+	if err := w.file.Sync(); err != nil {
+		return fmt.Errorf("error flushing WAL file to disk")
+	}
+
 	return nil
 }
 

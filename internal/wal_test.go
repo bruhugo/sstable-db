@@ -2,7 +2,6 @@ package db
 
 import (
 	"io"
-	"os"
 	"sync"
 	"testing"
 
@@ -10,20 +9,16 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var wal WAL
-
-func TestMain(m *testing.M) {
-	file, err := os.CreateTemp("", "wal")
-	if err != nil {
-		panic(err)
-	}
-	defer os.Remove(file.Name())
-	wal.file = file
-	wal.Clear()
-	m.Run()
+func createWalTest(t *testing.T) *WAL {
+	dir := t.TempDir()
+	wal := NewWAL()
+	wal.Open(dir)
+	return wal
 }
 
 func TestAppendWAL(t *testing.T) {
+	wal := createWalTest(t)
+	defer wal.Close()
 	tb := newRecordList()
 
 	for _, record := range tb {
@@ -34,6 +29,8 @@ func TestAppendWAL(t *testing.T) {
 }
 
 func TestClearWAL(t *testing.T) {
+	wal := createWalTest(t)
+	defer wal.Close()
 	tb := newRecordList()
 
 	for _, record := range tb {
@@ -56,7 +53,8 @@ func TestClearWAL(t *testing.T) {
 }
 
 func TestRecoverWAL(t *testing.T) {
-	wal.Clear()
+	wal := createWalTest(t)
+	defer wal.Close()
 	tb := newRecordList()
 
 	for _, record := range tb {
@@ -65,11 +63,12 @@ func TestRecoverWAL(t *testing.T) {
 		}
 	}
 
-	recoverTestWal(t, tb)
+	recoverTestWal(t, tb, wal)
 }
 
 func TestAppendConcurrentWAL(t *testing.T) {
-	wal.Clear()
+	wal := createWalTest(t)
+	defer wal.Close()
 	tb := newRecordList()
 
 	var wg sync.WaitGroup
@@ -100,7 +99,7 @@ func TestAppendConcurrentWAL(t *testing.T) {
 	}
 }
 
-func recoverTestWal(t *testing.T, tb []*pb.Record) {
+func recoverTestWal(t *testing.T, tb []*pb.Record, wal *WAL) {
 	c := make(chan *pb.Record)
 	go wal.Recover(c)
 	read := 0
@@ -130,5 +129,17 @@ func newRecordList() []*pb.Record {
 		{Key: "key4", Value: "value4", SequenceNumber: 4},
 		{Key: "key5", Value: "value5", SequenceNumber: 5},
 		{Key: "key6", Value: "value6", SequenceNumber: 6},
+	}
+}
+
+func BenchmarkAppendWAL(b *testing.B) {
+	b.ReportAllocs()
+	wal := NewWAL()
+	wal.Open(b.TempDir())
+	record := &pb.Record{Key: "key", Value: "value"}
+	b.ResetTimer()
+
+	for b.Loop() {
+		wal.Append(record)
 	}
 }

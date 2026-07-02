@@ -12,8 +12,8 @@ import (
 // numebers used in the database.
 type Manifest interface {
 	Recover() (RecoverData, error)
-	LatestSequenceNumber(sequenceNumber uint64) error
-	AddSSTable(sstable string) error
+	AddLatestSequenceNumber(sequenceNumber uint64) error
+	AddSSTablePath(sstable string) error
 	RemoveSSTable(sstable string) error
 }
 
@@ -69,7 +69,7 @@ func (m *ManifestImpl) Recover() (RecoverData, error) {
 }
 
 // NOT THREAD SAFE!!! USE YOUR OWN LOCK
-func (m *ManifestImpl) LatestSequenceNumber(sequenceNumber uint64) error {
+func (m *ManifestImpl) AddLatestSequenceNumber(sequenceNumber uint64) error {
 	record := &pb.ManifestRecord{
 		Type:     pb.ManifestRecordType_LAST_SEQUENCE_NUMBER,
 		Sequence: sequenceNumber,
@@ -83,7 +83,7 @@ func (m *ManifestImpl) LatestSequenceNumber(sequenceNumber uint64) error {
 	return nil
 }
 
-func (m *ManifestImpl) AddSSTable(sstable string) error {
+func (m *ManifestImpl) AddSSTablePath(sstable string) error {
 	record := &pb.ManifestRecord{
 		Type:     pb.ManifestRecordType_ADD_SSTABLE,
 		Filename: sstable,
