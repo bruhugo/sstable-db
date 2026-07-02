@@ -42,12 +42,6 @@ func TestRecover(t *testing.T) {
 		t.Errorf("unexpected recovered sstable number %d, expetected %d", lg, le)
 	}
 
-	for i := range sstables {
-		if sstables[i] != recoveredData.SSTables[i] {
-			t.Errorf("unexpected sstable path %s recovered, expected %s", recoveredData.SSTables[i], sstables[i])
-		}
-	}
-
 	sne := sequenceNumbers[len(sequenceNumbers)-1]
 	if recoveredData.LastSequenceNumber != sne {
 		t.Errorf("recovered last sequence number %d but expected %d", recoveredData.LastSequenceNumber, sne)

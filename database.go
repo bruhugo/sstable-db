@@ -35,6 +35,7 @@ func SetMemtableTreshold(t uint64) DatabaseDecorator {
 func SetDirectory(path string) DatabaseDecorator {
 	return func(d *Database) {
 		d.sstables.SetDir(path)
+		d.dir = path
 	}
 }
 
@@ -137,21 +138,16 @@ func (d *Database) Append(key, value string) error {
 	return nil
 }
 
-func (d *Database) Get(key string) (string, error) {
-	// TODO: finish implementing that, make it search in the sstables too
+func (d *Database) Get(key string) (string, bool) {
 	record, ok := d.memt.Get(key)
 	if ok {
-		return record.Value, nil
+		return record.Value, true
 	}
 
-	value, ok := d.sstables.Search(key)
-	if !ok {
-		return "", nil
-	}
-
-	return value, nil
+	return d.sstables.Search(key)
 }
 
+// TODO: implement that
 func (d *Database) Delete(key string) error {
 	return nil
 }
