@@ -20,19 +20,38 @@ func TestAddAndSearchMemtable(t *testing.T) {
 
 	// normal search
 	expected := tb[0]
-	value, ok := mem.Search(expected.Key)
+	record, ok := mem.Search(expected.Key)
 	if !ok {
 		t.Errorf("expected to find record with key %s in memtable, but didn't", expected.Key)
 	}
-	if value != expected.Value {
-		t.Errorf("expected value %s, but got %s", expected.Value, value)
+	if record.Value != expected.Value {
+		t.Errorf("expected value %s, but got %s", expected.Value, record.Value)
 	}
 
 	// not contain
 	notContainKey := "not contain"
-	value, ok = mem.Search(notContainKey)
+	_, ok = mem.Search(notContainKey)
 	if ok {
 		t.Errorf("expected to not find record with key %s in memtable, but didn't", notContainKey)
+	}
+}
+
+func TestRemoveMemtable(t *testing.T) {
+	mem := NewMemtable(100000)
+	mem.Add(&pb.Record{Key: "key", Value: "value"})
+	_, ok := mem.Search("key")
+	if !ok {
+		t.Error("expected to find added entry, but found nothing")
+	}
+
+	mem.Remove("key")
+
+	found, ok := mem.Search("key")
+	if !ok {
+		t.Error("expected to find removed entry, but it was not found")
+	}
+	if found.RecordType != pb.RecordType_RECORD_TYPE_DELETE {
+		t.Error("expected record to be a tombstone, but it is not")
 	}
 }
 
@@ -51,16 +70,16 @@ func TestAddConcurrentMemtable(t *testing.T) {
 	wg.Wait()
 
 	expected := tb[0]
-	value, ok := mem.Search(expected.Key)
+	record, ok := mem.Search(expected.Key)
 	if !ok {
 		t.Errorf("expected to find record with key %s in memtable, but didn't", expected.Key)
 	}
-	if value != expected.Value {
-		t.Errorf("expected value %s, but got %s", expected.Value, value)
+	if record.Value != expected.Value {
+		t.Errorf("expected value %s, but got %s", expected.Value, record.Value)
 	}
 
 	notContainKey := "not contain"
-	value, ok = mem.Search(notContainKey)
+	_, ok = mem.Search(notContainKey)
 	if ok {
 		t.Errorf("expected to not find record with key %s in memtable, but didn't", notContainKey)
 	}
@@ -97,22 +116,21 @@ func TestGetValuesAndSwitch(t *testing.T) {
 	mem.Add(newRecord)
 
 	// search value stored in new tree
-	newValue, ok := mem.Search(newRecord.Key)
+	foundRecord, ok := mem.Search(newRecord.Key)
 	if !ok {
 		t.Error("expected to find new record in new tree, but didn't")
 	}
-	if newValue != newRecord.Value {
-		t.Errorf("found %s but expected %s", newValue, newRecord.Value)
+	if foundRecord.Value != newRecord.Value {
+		t.Errorf("found %s but expected %s", foundRecord.Value, newRecord.Value)
 	}
 
 	// search value stored in old tree
-	oldRecord := tb[0]
-	oldValue, ok := mem.Search(oldRecord.Key)
+	oldRecord, ok := mem.Search(tb[0].Key)
 	if !ok {
 		t.Error("expected to find old record in old tree, but didn't")
 	}
-	if oldValue != oldRecord.Value {
-		t.Errorf("found %s but expected %s", oldValue, oldRecord.Value)
+	if oldRecord.Value != oldRecord.Value {
+		t.Errorf("found %s but expected %s", oldRecord.Value, oldRecord.Value)
 	}
 }
 

@@ -48,6 +48,51 @@ func TestCreateSSTableNormal(t *testing.T) {
 	}
 }
 
+func TestDeletedEntry(t *testing.T) {
+	records := newRecordList()
+
+	dir := t.TempDir()
+	sstables := NewSSTables(dir, manifestStub{})
+
+	err := sstables.CreateSSTable(records)
+	if err != nil {
+		t.Errorf("unexpected error creating sstable: %s", err.Error())
+	}
+
+	records = append(records, &pb.Record{Key: records[0].Key, RecordType: pb.RecordType_RECORD_TYPE_DELETE})
+
+	sstables.CreateSSTable(records)
+	_, ok := sstables.Search(records[0].Key)
+	if ok {
+		t.Errorf("expected to not find removed entry, but it was found")
+	}
+}
+
+// sstables must read the most recent entry of a given key,
+// so a tombstone in a newer sstable should override any
+// entries in the previously created sstables
+func TestDeletedEntryInNewTable(t *testing.T) {
+	records := newRecordList()
+
+	dir := t.TempDir()
+	sstables := NewSSTables(dir, manifestStub{})
+
+	err := sstables.CreateSSTable(records)
+	if err != nil {
+		t.Errorf("unexpected error creating sstable: %s", err.Error())
+	}
+
+	err = sstables.CreateSSTable([]*pb.Record{{Key: records[0].Key, RecordType: pb.RecordType_RECORD_TYPE_DELETE}})
+	if err != nil {
+		t.Errorf("unexpected error creating sstable: %s", err.Error())
+	}
+
+	_, ok := sstables.Search(records[0].Key)
+	if ok {
+		t.Errorf("expected to not find removed entry, but it was found")
+	}
+}
+
 func TestSSTableIterator(t *testing.T) {
 	records := newRecordList()
 

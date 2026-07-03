@@ -149,6 +149,7 @@ func (d *Database) Get(key string) (string, bool) {
 
 // TODO: implement that
 func (d *Database) Delete(key string) error {
+	d.memt.Remove(key)
 	return nil
 }
 

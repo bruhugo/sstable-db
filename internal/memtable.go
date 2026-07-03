@@ -43,25 +43,23 @@ func (mem *Memtable) GetIdleTree() *rbt.Tree {
 	return mem.trees[1-mem.currentTree]
 }
 
-func (mem *Memtable) Search(key string) (string, bool) {
+func (mem *Memtable) Search(key string) (*pb.Record, bool) {
 	mem.mu.Lock()
+	defer mem.mu.Unlock()
 	v, ok := mem.GetCurrentTree().Get(key)
 	if !ok {
-		// get the idle tree while in the lock
-		idleTree := mem.GetIdleTree()
-
-		// release lock since idle tree doesnt need one
-		mem.mu.Unlock()
-
-		v, ok = idleTree.Get(key)
+		v, ok = mem.GetIdleTree().Get(key)
 		if !ok {
-			return "", false
+			return nil, false
 		}
-		return v.(*pb.Record).Value, true
 	}
-	mem.mu.Unlock()
 
-	return v.(*pb.Record).Value, true
+	record, ok := v.(*pb.Record)
+	if !ok {
+		return nil, false
+	}
+
+	return record, true
 }
 
 // adds the metarecord to the memtable and return
@@ -73,6 +71,18 @@ func (mem *Memtable) Add(record *pb.Record) bool {
 	mem.GetCurrentTree().Put(record.Key, record)
 	mem.size[mem.currentTree] += uint64(proto.Size(record))
 	return mem.size[mem.currentTree] >= mem.treshold
+}
+
+// removes the record from both trees
+func (mem *Memtable) Remove(key string) {
+	record := &pb.Record{
+		RecordType: pb.RecordType_RECORD_TYPE_DELETE,
+		Key:        key,
+	}
+	mem.mu.Lock()
+	defer mem.mu.Unlock()
+
+	mem.GetCurrentTree().Put(key, record)
 }
 
 // returns the list of metarecords and a handle used to clear the tree

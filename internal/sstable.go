@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -276,7 +277,11 @@ func (sst *SSTables) Search(key string) (string, bool) {
 	sst.mu.RLock()
 	defer sst.mu.RUnlock()
 
-	for _, table := range sst.tables {
+	// always look in the most recent one
+	cpy := slices.Clone(sst.tables)
+	slices.Reverse(cpy)
+
+	for _, table := range cpy {
 		file := table.it.file
 
 		file.Seek(-8, io.SeekEnd)
@@ -306,6 +311,10 @@ func (sst *SSTables) Search(key string) (string, bool) {
 
 		record, err := parseSSTableRecord(file, recordSize)
 		if err != nil {
+			return "", false
+		}
+
+		if record.Record.RecordType == pb.RecordType_RECORD_TYPE_DELETE {
 			return "", false
 		}
 
