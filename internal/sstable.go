@@ -3,88 +3,51 @@ package db
 import (
 	"bufio"
 	"container/heap"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
 	"slices"
-	"strings"
 	"sync"
+	"time"
 
 	pb "github.com/bruhugo/protobuf_sstable/gen/go"
-	"google.golang.org/protobuf/proto"
 )
 
 type RecordSize uint32
 
-type SSTableIterator struct {
-	file    *os.File
-	record  *pb.SSTableRecord
-	data    []byte
-	key     string
-	started bool
+type SSTableStat struct {
+	Size      uint64
+	Path      string
+	Entries   uint32
+	CreatedAt time.Time
 }
 
-func (it *SSTableIterator) Next() bool {
-	if !it.started {
-		it.started = true
-		it.file.Seek(0, io.SeekStart)
-	}
-	var size RecordSize
-	err := binary.Read(it.file, binary.LittleEndian, &size)
-	if err != nil {
-		return false
-	}
-
-	b := make([]byte, size)
-	if _, err := it.file.Read(b); err != nil {
-		// TODO: maybe handle the error here
-		return false
-	}
-
-	record := &pb.SSTableRecord{}
-	err = proto.Unmarshal(b, record)
-	if err != nil {
-		return false
-	}
-
-	it.data = b
-	it.record = record
-	it.key = record.Record.Key
-
-	return true
-}
-
-type IteratorHeap []*SSTableIterator
-
-func (h IteratorHeap) Len() int { return len(h) }
-func (h IteratorHeap) Less(i, j int) bool {
-	key0 := h[i].key
-	key1 := h[j].key
-
-	return strings.Compare(key0, key1) == -1
-
-}
-func (h IteratorHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
-
-func (h *IteratorHeap) Push(x any) {
-	// Push and Pop use pointer receivers because they modify the slice's length,
-	// not just its contents.
-	*h = append(*h, x.(*SSTableIterator))
-}
-
-func (h *IteratorHeap) Pop() any {
-	old := *h
-	n := len(old)
-	x := old[n-1]
-	*h = old[0 : n-1]
-	return x
+type SSTablesStat struct {
+	Tables      []SSTableStat
+	TableNumber uint32
+	TotalSize   uint64
+	LastMerged  time.Time
 }
 
 type SSTable struct {
-	it       *SSTableIterator
-	filename string
-	valid    bool
+	it        *SSTableIterator
+	filename  string
+	valid     bool
+	entries   uint32
+	createdAt time.Time
+}
+
+func (s *SSTable) Stat() (SSTableStat, error) {
+	stat, err := s.it.file.Stat()
+	if err != nil {
+		return SSTableStat{}, err
+	}
+
+	return SSTableStat{
+		Entries:   s.entries,
+		Size:      uint64(stat.Size()),
+		CreatedAt: s.createdAt,
+	}, nil
 }
 
 func newSSTable(file *os.File) *SSTable {
@@ -102,6 +65,7 @@ type SSTables struct {
 	dir                 string
 	tableSequenceNumber uint64
 	manifest            Manifest
+	lastMerged          time.Time
 }
 
 func NewSSTables(dir string, manifest Manifest) *SSTables {
@@ -125,6 +89,7 @@ func (sst *SSTables) CreateSSTable(records []*pb.Record) error {
 	}
 
 	t := newSSTable(file)
+	t.entries = uint32(len(records))
 	sst.tables = append(sst.tables, t)
 	sst.mu.Unlock()
 
@@ -180,6 +145,7 @@ func (sst *SSTables) RecoverSSTables(sstables ...string) error {
 			it: &SSTableIterator{
 				file: file,
 			},
+			valid: true,
 		}
 
 		sst.tables = append(sst.tables, table)
@@ -194,6 +160,9 @@ func (sst *SSTables) createSSTableName(cur uint64) string {
 }
 
 func (sst *SSTables) Merge() error {
+	if len(sst.tables) <= 1 {
+		return nil
+	}
 
 	h := make(IteratorHeap, 0)
 
@@ -259,12 +228,18 @@ func (sst *SSTables) Merge() error {
 		{
 			it:       &SSTableIterator{file: file},
 			filename: newName,
+			valid:    true,
 		},
 	}
 
+	sst.lastMerged = time.Now()
+
 	for _, table := range oldTable {
 		sst.manifest.RemoveSSTable(table.filename)
-		os.Remove(table.filename)
+		err := os.Remove(table.filename)
+		if err != nil {
+			panic("error removing sstable file: " + err.Error())
+		}
 	}
 
 	os.Rename(file.Name(), newName)
@@ -322,4 +297,21 @@ func (sst *SSTables) Search(key string) (string, bool) {
 	}
 
 	return "", false
+}
+
+func (sst *SSTables) Stat() (SSTablesStat, error) {
+	stat := SSTablesStat{
+		TableNumber: uint32(len(sst.tables)),
+		LastMerged:  sst.lastMerged,
+	}
+	for _, t := range sst.tables {
+		tstat, err := t.Stat()
+		if err != nil {
+			return SSTablesStat{}, fmt.Errorf("error getting stats for sstable: %w", err)
+		}
+		stat.TotalSize += tstat.Size
+		stat.Tables = append(stat.Tables, tstat)
+	}
+
+	return stat, nil
 }

@@ -7,13 +7,28 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	pb "github.com/bruhugo/protobuf_sstable/gen/go"
 )
 
+type WALTimestamps struct {
+	LastWritten   time.Time
+	LastRecovered time.Time
+	LastTruncated time.Time
+}
+
+type WALStat struct {
+	Size    uint64
+	Entries uint64
+	WALTimestamps
+}
+
 type WAL struct {
-	file *os.File
-	mu   sync.RWMutex
+	file    *os.File
+	mu      sync.RWMutex
+	entries uint64
+	WALTimestamps
 }
 
 func NewWAL() *WAL {
@@ -50,6 +65,8 @@ func (w *WAL) Clear() error {
 	if err != nil {
 		return fmt.Errorf("error seeking to start of wal file: %w", err)
 	}
+	w.LastTruncated = time.Now()
+	w.entries = 0
 	return nil
 }
 
@@ -69,12 +86,16 @@ func (w *WAL) Append(record *pb.Record) error {
 		return fmt.Errorf("error flushing WAL file to disk")
 	}
 
+	w.LastWritten = time.Now()
+	w.entries++
+
 	return nil
 }
 
 func (w *WAL) Recover(c chan *pb.Record) {
 	defer close(c)
 	w.file.Seek(0, io.SeekStart)
+	w.LastRecovered = time.Now()
 	for {
 		offset, err := w.file.Seek(0, io.SeekCurrent)
 		if err != nil {
@@ -91,4 +112,19 @@ func (w *WAL) Recover(c chan *pb.Record) {
 
 		c <- record.Record
 	}
+}
+
+func (wal *WAL) Stat() (WALStat, error) {
+	stat, err := wal.file.Stat()
+	if err != nil {
+		return WALStat{}, fmt.Errorf("error getting wal file stats")
+	}
+
+	size := uint64(stat.Size())
+
+	return WALStat{
+		WALTimestamps: wal.WALTimestamps,
+		Entries:       wal.entries,
+		Size:          size,
+	}, nil
 }

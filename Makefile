@@ -25,3 +25,6 @@ test-cover-html: test-cover
 
 bench:
 	go test -bench=. -count=3 ./... 
+
+server:
+	go run ./cmd/simple_server 8080

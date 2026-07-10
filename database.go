@@ -11,6 +11,12 @@ import (
 	db "github.com/bruhugo/protobuf_sstable/internal"
 )
 
+type DatabaseStat struct {
+	WALStat      db.WALStat      `json:"wal_stat"`
+	SSTableStat  db.SSTablesStat `json:"sstable_stat"`
+	MemtableStat db.MemtableStat `json:"memtable_stat"`
+}
+
 type Database struct {
 	wal                 *db.WAL
 	memt                *db.Memtable
@@ -21,18 +27,15 @@ type Database struct {
 	dir                 string
 }
 
-// MetaRecord is what is used between WalRecords and
-// SSTableRecords in the program
-
 type DatabaseDecorator func(*Database)
 
-func SetMemtableTreshold(t uint64) DatabaseDecorator {
+func WithMemtableTreshold(t uint64) DatabaseDecorator {
 	return func(d *Database) {
 		d.memt.SetTreshold(t)
 	}
 }
 
-func SetDirectory(path string) DatabaseDecorator {
+func WithDirectory(path string) DatabaseDecorator {
 	return func(d *Database) {
 		d.sstables.SetDir(path)
 		d.dir = path
@@ -147,25 +150,44 @@ func (d *Database) Get(key string) (string, bool) {
 	return d.sstables.Search(key)
 }
 
-// TODO: implement that
 func (d *Database) Delete(key string) error {
 	d.memt.Remove(key)
 	return nil
 }
 
-// merge sstables async
 func (d *Database) MergeAsync(ctx context.Context) {
-	// TODO: make it configurable
 	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO: handle error somehow
-			d.sstables.Merge()
-			return
+			err := d.sstables.Merge()
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
+}
+
+func (d *Database) Stat() (DatabaseStat, error) {
+	memtableStat := d.memt.Stat()
+
+	sstableStat, err := d.sstables.Stat()
+	if err != nil {
+		return DatabaseStat{}, err
+	}
+
+	walStat, err := d.wal.Stat()
+	if err != nil {
+		return DatabaseStat{}, err
+	}
+
+	return DatabaseStat{
+		MemtableStat: memtableStat,
+		WALStat:      walStat,
+		SSTableStat:  sstableStat,
+	}, nil
 }

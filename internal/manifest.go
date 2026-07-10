@@ -80,6 +80,8 @@ func (m *ManifestImpl) AddLatestSequenceNumber(sequenceNumber uint64) error {
 		return err
 	}
 
+	m.file.Sync()
+
 	return nil
 }
 
@@ -94,6 +96,8 @@ func (m *ManifestImpl) AddSSTablePath(sstable string) error {
 		return err
 	}
 
+	m.file.Sync()
+
 	return nil
 }
 
@@ -107,6 +111,8 @@ func (m *ManifestImpl) RemoveSSTable(sstable string) error {
 	if err != nil {
 		return err
 	}
+
+	m.file.Sync()
 
 	return nil
 }

@@ -52,7 +52,7 @@ func TestDatabaseRecover(t *testing.T) {
 		}
 	}
 
-	db2, err := NewDatabase(SetDirectory(db.dir))
+	db2, err := NewDatabase(WithDirectory(db.dir))
 	if err != nil {
 		t.Fatal("error creating second database")
 	}
@@ -68,7 +68,7 @@ func TestDatabaseRecover(t *testing.T) {
 }
 
 func createTestDb(t *testing.T) *Database {
-	db, err := NewDatabase(SetDirectory(t.TempDir()))
+	db, err := NewDatabase(WithDirectory(t.TempDir()))
 	if err != nil {
 		t.Fatalf("unexpected error while creating database: %s", err)
 	}

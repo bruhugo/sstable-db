@@ -1,23 +1,20 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/bruhugo/protobuf_sstable"
 )
 
-func main() {
-	args := os.Args
-	if len(args) != 2 {
-		panic("you should use this program like: ./<COMMAND NAME> <PORT>")
-	}
+const Kilobyte uint64 = 1024
+const Megabyte uint64 = 1024 * Kilobyte
 
-	db, err := protobuf_sstable.NewDatabase()
+func main() {
+	db, err := protobuf_sstable.NewDatabase(protobuf_sstable.WithMemtableTreshold(Kilobyte))
 	if err != nil {
 		panic(err)
 	}
@@ -26,6 +23,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /{key}", PostHandler(db))
 	mux.HandleFunc("GET /{key}", GetHandler(db))
+	mux.HandleFunc("GET /stats", StatHandler(db))
 
 	middleware := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("PATH: %s", r.URL.Path)
@@ -33,7 +31,7 @@ func main() {
 	})
 
 	server := http.Server{
-		Addr:         fmt.Sprintf(":%s", args[1]),
+		Addr:         ":8080",
 		Handler:      middleware,
 		IdleTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -89,6 +87,24 @@ func GetHandler(db *protobuf_sstable.Database) http.HandlerFunc {
 		_, err := w.Write([]byte(value))
 		if err != nil {
 			log.Printf("error: %s", err)
+			w.WriteHeader(500)
+			return
+		}
+	}
+}
+
+func StatHandler(db *protobuf_sstable.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		stats, err := db.Stat()
+		if err != nil {
+			w.WriteHeader(500)
+			return
+		}
+
+		encoder := json.NewEncoder(w)
+		encoder.SetIndent("", "    ")
+		err = encoder.Encode(stats)
+		if err != nil {
 			w.WriteHeader(500)
 			return
 		}

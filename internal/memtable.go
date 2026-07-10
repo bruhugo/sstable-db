@@ -2,20 +2,28 @@ package db
 
 import (
 	"sync"
+	"time"
 
 	pb "github.com/bruhugo/protobuf_sstable/gen/go"
 	rbt "github.com/emirpasic/gods/trees/redblacktree"
 	"google.golang.org/protobuf/proto"
 )
 
+type MemtableStat struct {
+	Entries      uint32
+	Size         uint64
+	LastSwitched time.Time
+}
+
 type TreeHandle uint8
 
 type Memtable struct {
-	trees       [2]*rbt.Tree
-	size        [2]uint64
-	currentTree TreeHandle
-	treshold    uint64
-	mu          sync.RWMutex
+	trees        [2]*rbt.Tree
+	size         [2]uint64
+	currentTree  TreeHandle
+	treshold     uint64
+	lastSwitched time.Time
+	mu           sync.RWMutex
 }
 
 func NewMemtable(treshold uint64) *Memtable {
@@ -33,12 +41,10 @@ func (memt *Memtable) SetTreshold(t uint64) {
 	memt.treshold = t
 }
 
-// NOT THREAD SAFE!!!
 func (mem *Memtable) GetCurrentTree() *rbt.Tree {
 	return mem.trees[mem.currentTree]
 }
 
-// NOT THREAD SAFE!!!
 func (mem *Memtable) GetIdleTree() *rbt.Tree {
 	return mem.trees[1-mem.currentTree]
 }
@@ -91,6 +97,8 @@ func (mem *Memtable) GetValuesAndSwitch() ([]*pb.Record, TreeHandle) {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
 
+	mem.lastSwitched = time.Now()
+
 	records := make([]*pb.Record, 0)
 
 	for _, r := range mem.GetCurrentTree().Values() {
@@ -123,4 +131,18 @@ func (mem *Memtable) Get(key string) (*pb.Record, bool) {
 		return nil, false
 	}
 	return record.(*pb.Record), true
+}
+
+func (mem *Memtable) Stat() MemtableStat {
+	mem.mu.RLock()
+	defer mem.mu.RUnlock()
+
+	size := mem.size[0] + mem.size[1]
+	entries := mem.trees[0].Size() + mem.trees[1].Size()
+
+	return MemtableStat{
+		Size:         size,
+		Entries:      uint32(entries),
+		LastSwitched: mem.lastSwitched,
+	}
 }

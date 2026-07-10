@@ -8,8 +8,8 @@ import (
 
 func main() {
 	db, err := ps.NewDatabase(
-		ps.SetMemtableTreshold(10),
-		ps.SetDirectory("db/mydb"),
+		ps.WithMemtableTreshold(10),
+		ps.WithDirectory("db/mydb"),
 	)
 	if err != nil {
 		panic(err)
