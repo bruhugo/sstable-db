@@ -1,4 +1,4 @@
 c.out
-cmd/main.go
+cmd/test
 cmd/db/*
 db
